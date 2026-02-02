@@ -14,7 +14,7 @@ services:
       - PYTEST_ARGS=-v --tb=short
     volumes:
       - ./src:/app/src:ro
-      - ./tests:/app/tests:ro
+      - ./tests:/app/tests
       - ./config.yaml:/app/config.yaml:ro
       - test-results:/app/test-results
     networks:
@@ -24,6 +24,7 @@ services:
       --cov=src/ids --cov-report=term-missing 
       --cov-report=html:/app/test-results/htmlcov
       --junitxml=/app/test-results/junit.xml
+      --log-file=/tmp/pytest.log
 
   # ==========================================================================
   # Unit Tests Only

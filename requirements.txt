@@ -1,0 +1,37 @@
+# Core dependencies
+pyyaml>=6.0  # YAML parsing
+toml>=0.10  # TOML parsing (for Vector config)
+pydantic==2.5.0  # Configuration validation
+python-dotenv==1.0.0  # Environment variables
+
+# Dependency Injection & Architecture
+punq>=0.6.0  # IoC container
+dataclasses-json==0.5.14  # Serialization for dataclasses
+
+# AWS Integration
+boto3>=1.26.0  # AWS SDK
+botocore>=1.29.0  # AWS core
+requests>=2.28.0  # HTTP requests
+requests-aws4auth>=1.2.0  # SigV4 authentication for AWS
+
+# Async & Networking
+aiohttp>=3.8.0  # Async HTTP client
+redis>=4.5.0  # Redis client
+
+# Monitoring & Logging
+prometheus-client>=0.17.0  # Prometheus metrics
+python-json-logger>=2.0.4  # JSON logging
+
+# Testing & Quality
+pytest>=7.0.0  # Test framework
+pytest-asyncio>=0.21.0  # Async test support
+pytest-cov>=4.0.0  # Code coverage
+pytest-xdist>=3.0.0  # Parallel test execution
+pytest-mock>=3.10.0  # Mock support
+mock>=5.0.0  # Mocking library
+
+# Code Quality
+flake8>=6.0.0  # Linting
+black>=23.0.0  # Formatting
+isort>=5.12.0  # Import sorting
+bandit>=1.7.0  # Security checks
