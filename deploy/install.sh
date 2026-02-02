@@ -13,7 +13,7 @@ echo "Mise à jour du système..."
 apt update && apt upgrade -y
 
 echo "Installation des dépendances système..."
-apt install -y python3-pip python3-venv git curl gnupg2 apt-transport-https ca-certificates software-properties-common
+apt install -y python3-pip python3-venv git curl gnupg2 apt-transport-https ca-certificates software-properties-common suricata # Ajout de suricata
 
 echo "Installation de Docker..."
 # Ajouter la clé GPG officielle de Docker
@@ -40,6 +40,16 @@ echo "Installation des dépendances Python..."
 echo "Rendre les scripts de déploiement exécutables..."
 chmod +x deploy/*.sh
 
+echo "Configuration de Suricata..."
+# Créer le répertoire des règles Suricata si non existant
+mkdir -p /etc/suricata/rules
+# Copier les règles par défaut ou un placeholder
+# Pour une vraie installation, il faudrait télécharger les règles ici
+touch /etc/suricata/rules/local.rules # Créer un fichier de règles vide pour éviter les erreurs
+# Désactiver le service Suricata par défaut s'il est activé par l'installation
+systemctl disable suricata || true
+systemctl stop suricata || true
+
 echo "Configuration de l'interface réseau (eth0 uniquement)..."
 # Copier le script network_eth0_only.sh et le rendre exécutable
 cp deploy/network_eth0_only.sh /usr/local/bin/network_eth0_only.sh
@@ -64,6 +74,23 @@ EOF
 systemctl daemon-reload
 systemctl enable network-eth0-only.service
 systemctl start network-eth0-only.service
+
+echo "Création et montage du RAM disk pour les logs Suricata..."
+# Chemin du RAM disk et taille (2GB comme spécifié dans le README)
+RAMDISK_PATH="/mnt/ram_logs"
+RAMDISK_SIZE="2G" # 2 GB
+
+# Créer le répertoire si non existant
+mkdir -p $RAMDISK_PATH
+
+# Monter le RAM disk
+mount -t tmpfs -o size=$RAMDISK_SIZE tmpfs $RAMDISK_PATH
+
+# Ajouter au fstab pour persistance après redémarrage (optionnel, dépend si les logs doivent survivre un reboot)
+# Pour un RAM disk, il est généralement recréé à chaque démarrage.
+# Si la persistance est nécessaire, il faudrait une autre stratégie.
+# Pour l'instant, nous nous basons sur la recréation au démarrage.
+# echo "tmpfs $RAMDISK_PATH tmpfs nodev,nosuid,size=$RAMDISK_SIZE 0 0" >> /etc/fstab
 
 echo "Installation et configuration initiales terminées."
 echo "Veuillez redémarrer votre Raspberry Pi pour que tous les changements prennent effet."

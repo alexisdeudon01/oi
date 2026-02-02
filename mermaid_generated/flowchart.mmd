@@ -1,0 +1,12 @@
+---
+title: Diagramme de Flux
+---
+graph TD
+    A[Début]
+    B[Effectuer une tâche]
+    C[Décision ?]
+    D[Fin]
+    A --> B
+    B --> C
+    C -->|Oui| D
+    C -->|Non| B

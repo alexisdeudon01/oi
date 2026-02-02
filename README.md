@@ -1,382 +1,327 @@
-# Architecture du pipeline SOC IDS
 
-Ce document décrit l’architecture cible du pipeline SOC pour un IDS Suricata déployé sur **Raspberry Pi 5 (8 GB RAM)**, avec ingestion vers **AWS OpenSearch**, orchestration Python, parallélisme contrôlé et déploiement Docker.
+# IDS2 — SOC IDS sur Raspberry Pi 5
+
+Ce projet implémente un **pipeline SOC IDS complet**, robuste et automatisé, basé sur **Suricata**, **Vector**, **Redis** et **AWS OpenSearch**, déployé sur un **Raspberry Pi 5 (8 GB RAM)**.
+L’architecture est conçue pour fonctionner **24/7**, sous contraintes de ressources, avec **parallélisme contrôlé**, **backpressure**, **observabilité complète** et **pilotage local via interface Web**.
 
 ---
 
-## 0) Contexte matériel & contraintes
+## Table des matières
+
+1. Objectifs du projet
+2. Périmètre et principes généraux
+3. Plateforme matérielle et contraintes
+4. Vue d’ensemble de l’architecture
+5. Flux de données (pipeline SOC)
+6. Rôle des composants
+7. Organisation des services (systemd & Docker)
+8. Gestion des ressources (CPU / RAM / disque)
+9. Gestion des logs et de la mémoire
+10. Parallélisme et multi-process
+11. Sécurité réseau
+12. Observabilité et pilotage Web
+13. Automatisation et déploiement
+14. Exploitation et cycle de vie
+15. Résumé final
+
+---
+
+## 1. Objectifs du projet
+
+Les objectifs principaux sont :
+
+* Déployer un **IDS passif** basé sur Suricata via **port mirroring**
+* Centraliser les événements de sécurité dans **AWS OpenSearch**
+* Garantir la **stabilité du système** sous forte charge
+* Ne **jamais dépasser 70 % de CPU et de RAM**
+* Fournir une **observabilité complète** (logs, métriques, dashboards)
+* Permettre un **pilotage local sans SSH** (interface Web)
+* Automatiser **100 % du déploiement** après un reset usine du Pi
+
+---
+
+## 2. Périmètre et principes généraux
+
+### Ce que fait le projet
+
+* Capture passive du trafic réseau
+* Détection IDS (alertes, anomalies)
+* Transformation des événements en format ECS
+* Bufferisation intelligente en cas de surcharge
+* Ingestion sécurisée vers OpenSearch
+* Supervision continue des ressources
+* Administration locale centralisée
+
+### Ce que le projet ne fait pas
+
+* Pas d’IPS (aucun blocage réseau)
+* Pas d’inspection de paquets en Python
+* Pas de stockage long terme local
+* Pas d’exposition directe à Internet
+
+---
+
+## 3. Plateforme matérielle et contraintes
 
 ### Raspberry Pi cible
 
 | Élément          | Valeur                       |
 | ---------------- | ---------------------------- |
 | Modèle           | Raspberry Pi 5               |
-| RAM              | 8 GB                         |
 | CPU              | 4 × Cortex-A76               |
+| RAM              | 8 GB                         |
 | OS               | Debian GNU/Linux 13 (Trixie) |
-| IP fixe          | **192.168.178.66**           |
+| IP               | **192.168.178.66**           |
 | Interface réseau | **eth0 uniquement**          |
 | Swap             | 2 GB                         |
 | Stockage         | microSD 119 GB               |
 
-### Contraintes clés
+### Contraintes strictes
 
-* **CPU total utilisé ≤ 70 %**
-* **RAM totale utilisée ≤ 70 %**
-* Tolérance aux pics de trafic (burst IDS)
-* Aucun blocage réseau ou CPU lors des tests AWS
-* Pipeline résilient (buffer + backpressure)
-
----
-
-## 1) Bibliothèques nécessaires
-
-### Python (`requirements.txt`)
-
-| Bibliothèque      | Rôle                                    |
-| ----------------- | --------------------------------------- |
-| boto3             | SDK AWS (création / gestion OpenSearch) |
-| opensearch-py     | Client OpenSearch (bulk, health checks) |
-| uvloop            | Boucle asyncio ultra-performante        |
-| asyncio           | Parallélisme I/O                        |
-| orjson            | Sérialisation JSON rapide               |
-| msgpack-python    | Format binaire rapide (interne)         |
-| aioredis          | Buffer Redis asynchrone                 |
-| PyYAML            | Parsing `config.yaml`                   |
-| watchdog          | Suivi temps réel de `eve.json`          |
-| requests          | HTTP simple                             |
-| prometheus-client | Export métriques                        |
-| GitPython         | Commit / push sur branche `dev`         |
-| pytest            | Tests                                   |
+* CPU total ≤ **70 %**
+* RAM totale ≤ **70 %**
+* Fonctionnement continu (24/7)
+* Résistance aux pics de trafic (burst IDS)
+* Aucun appel bloquant dans la boucle critique
 
 ---
 
-## 2) Stratégie globale
+## 4. Vue d’ensemble de l’architecture
 
-Le projet repose sur une **stratégie “pipeline orienté flux”**, découplée, asynchrone et résiliente.
-
-### Principes clés
-
-* **Découplage** : Suricata ≠ Vector ≠ OpenSearch
-* **Backpressure** : Redis absorbe les pics
-* **Async first** : aucun appel réseau bloquant
-* **Configuration unique** : `config.yaml`
-* **Automatisation totale** : zéro configuration manuelle
-* **Observabilité native** : métriques partout
-
----
-
-## 3) Qu’est-ce que l’AWS SDK (boto3) ?
-
-`boto3` est le **SDK officiel AWS pour Python**.
-
-Il permet :
-
-* Authentification via **SigV4**
-* Appels API sécurisés
-* Création / description de ressources AWS
-* Polling d’état non bloquant
-
-### Utilisation dans ce projet
-
-* Création ou récupération du **OpenSearch Domain**
-* Attente de l’état `ACTIVE`
-* Récupération de l’endpoint
-* Application d’index templates
-* Tests de connectivité
-
----
-
-## 4) Qu’est-ce que le pipeline SOC ?
-
-Un pipeline SOC est une **chaîne continue de traitement de logs sécurité**.
-
-### Chaîne logique
-
-1. Capture réseau (Suricata)
-2. Écriture JSON (`eve.json`)
-3. Parsing / mapping ECS (Vector)
-4. Bufferisation (Redis)
-5. Ingestion bulk (OpenSearch)
-6. Visualisation / alertes
-7. Monitoring système & pipeline
-
-### Schéma simplifié
+### Architecture logique
 
 ```
-Suricata → Vector → Redis → OpenSearch
-              ↓
-         Prometheus → Grafana
+Trafic réseau (mirroring)
+        ↓
+     Suricata
+        ↓
+    eve.json (RAM)
+        ↓
+      Vector
+        ↓
+      Redis (buffer)
+        ↓
+ AWS OpenSearch
+        ↓
+ Dashboards & Alertes
 ```
 
----
+### Architecture physique
 
-## 5) Structures de données
-
-### 5.1 Suricata JSON (eve.json)
-
-```json
-{
-  "timestamp": "2026-02-01T02:10:00.123Z",
-  "event_type": "alert",
-  "src_ip": "192.168.178.5",
-  "dest_ip": "10.0.0.10",
-  "alert": {
-    "signature": "ET SCAN ...",
-    "severity": 2
-  }
-}
-```
+* **Raspberry Pi** : capture, transformation, orchestration
+* **AWS** : indexation, recherche, visualisation distante
 
 ---
 
-### 5.2 ECS (après Vector)
+## 5. Flux de données (pipeline SOC)
 
-```json
-{
-  "@timestamp": "2026-02-01T02:10:00.123Z",
-  "event": {
-    "kind": "alert",
-    "category": "network"
-  },
-  "source": {
-    "ip": "192.168.178.5"
-  },
-  "destination": {
-    "ip": "10.0.0.10"
-  },
-  "suricata": {
-    "signature": "ET SCAN ...",
-    "severity": 2
-  }
-}
-```
+1. Le trafic réseau est dupliqué via **port mirroring**
+2. Suricata capture les paquets sur `eth0`
+3. Les événements sont écrits dans `eve.json`
+4. Vector lit les événements en temps réel
+5. Les événements sont mappés au format **ECS**
+6. Redis absorbe les pics si OpenSearch ralentit
+7. Les données sont envoyées en **bulk HTTPS**
+8. Les dashboards affichent les alertes et métriques
 
 ---
 
-### 5.3 Bulk OpenSearch (NDJSON)
+## 6. Rôle des composants
 
-```
-{ "index": { "_index": "suricata-2026.02.01" } }
-{ "doc ECS" }
-```
+### Suricata
 
----
+* IDS haute performance (C / kernel)
+* Capture passive uniquement
+* Fonctionne **hors Docker**
+* Écrit exclusivement en local
+* Géré comme un service `systemd`
 
-## 6) Phases du système
+### Vector
 
-### Phase A — Initialisation Raspberry Pi
+* Collecte et transformation des logs
+* Mapping ECS natif
+* Batching, retry, backoff
+* Fonctionne en **Docker**
 
-* Désactiver toutes les interfaces sauf `eth0`
-* Configurer firewall minimal
-* Créer RAM disk pour logs
-* Installer Docker & Python
+### Redis
 
----
+* Buffer de sécurité
+* Backpressure
+* Évite la perte de logs
 
-### Phase B — Provisioning AWS
+### AWS OpenSearch
 
-* Charger `config.yaml`
-* Vérifier credentials
-* Créer ou détecter domaine
-* Attendre `ACTIVE`
-* Sauvegarder endpoint
+* Indexation et recherche
+* Stockage long terme
+* Dashboards et alertes
 
----
+### Agent SOC Python
 
-### Phase C — Tests réseau (asynchrones)
-
-Exécutés **en parallèle** :
-
-* DNS
-* TLS
-* Bulk
-
----
-
-### Phase D — Génération de configurations
-
-* `suricata.yaml`
-* `vector.toml`
-* `docker-compose.yml`
-* `prometheus.yml`
-* Dashboards Grafana
+* Orchestrateur central
+* Multi-process
+* Supervision CPU/RAM
+* Pilotage systemd & Docker
+* Backend de la Web UI
 
 ---
 
-### Phase E — Déploiement Docker
+## 7. Organisation des services
 
-* Redis
+### systemd (host)
+
+* `ids2-network.service` : force `eth0` uniquement
+* `suricata.service` : capture IDS
+* `ids2-agent.service` : orchestration SOC
+
+### Docker
+
 * Vector
+* Redis
 * Prometheus
 * Grafana
+* FastAPI (control plane)
+* cAdvisor
+* Node Exporter
+
+Chaque service est **isolé**, supervisé et redémarré automatiquement.
 
 ---
 
-### Phase F — Ingestion & monitoring
-
-* Tail `eve.json`
-* Vector → Redis → OpenSearch
-* Export métriques
-* Alerting
-
----
-
-### Phase G — Git (branche dev)
-
-* Vérification branche `dev`
-* Commit automatique
-* Push sur `dev`
-
----
-
-## 7) Conteneurs Docker
-
-| Conteneur  | Rôle                |
-| ---------- | ------------------- |
-| Redis      | Buffer backpressure |
-| Vector     | Parsing + ingestion |
-| Prometheus | Collecte métriques  |
-| Grafana    | Dashboards          |
-
----
-
-## 8) Parallélisme & multithreading
-
-### 8.1 Parallélisme Python (I/O)
-
-Utilisé pour :
-
-* DNS
-* TLS
-* Tests bulk
-* Monitoring
-
-```python
-await asyncio.gather(
-  test_dns(),
-  test_tls(),
-  test_bulk()
-)
-```
-
-### 8.2 Vector (natif)
-
-Vector est écrit en **Rust**, multi-thread nativement :
-
-* Lecture fichiers
-* Parsing ECS
-* Batching
-* Retry/backoff
-
----
-
-## 9) Gestion CPU & RAM (< 70 %)
+## 8. Gestion des ressources (CPU / RAM)
 
 ### Répartition CPU
 
-| Composant  | CPU     |
-| ---------- | ------- |
-| Suricata   | 3 cœurs |
-| Vector     | 1 cœur  |
-| Redis      | faible  |
-| Prometheus | faible  |
-| Grafana    | faible  |
+* Suricata : ~3 cœurs
+* Vector : ~1 cœur
+* Redis : ~0.5 cœur
+* Prometheus : ~0.2 cœur
+* Grafana : ~0.2 cœur
+* FastAPI : ~0.5 cœur
+* cAdvisor : ~0.1 cœur
+* Node Exporter : ~0.1 cœur
 
 ### Répartition RAM
 
-| Composant    | RAM max |
-| ------------ | ------- |
-| Suricata     | ~4 GB   |
-| Vector       | ~1 GB   |
-| Redis        | ~512 MB |
-| Docker stack | ~1 GB   |
-| Libre        | >1 GB   |
+* Suricata : ~4 GB
+* Vector : ~1 GB
+* Redis : ~512 MB
+* Prometheus : ~256 MB
+* Grafana : ~256 MB
+* FastAPI : ~256 MB
+* cAdvisor : ~64 MB
+* Node Exporter : ~64 MB
+* Libre : >1 GB
 
 ### Mécanismes de contrôle
 
-* Limites Docker (`mem_limit`, `cpus`)
+* Limites systemd (`CPUQuota`, `MemoryMax`)
+* Limites Docker (`cpus`, `mem_limit`)
+* Throttling dynamique par l’agent
+* Backpressure Redis
 * Batching Vector
-* Chunking async Python
+
+---
+
+## 9. Gestion des logs et de la mémoire
+
+### Logs Suricata
+
+* Stockés en **RAM disk**
+* Taille maximale strictement bornée
+* Rotation agressive
+* Aucun historique local conservé
+
+### Mémoire
+
+* Aucun cache applicatif long terme
 * Garbage collection Python forcée
-* Rotation logs RAM disk
+* Nettoyage périodique du cache kernel
+* Swappiness faible
+
+Objectif : **zéro fuite mémoire**, même après plusieurs semaines.
 
 ---
 
-## 10) Réseau & sécurité
+## 10. Parallélisme et multi-process
 
-### Interface
+### Agent SOC
 
-* **eth0 uniquement**
-* IP : **192.168.178.66**
+L’agent est découpé en **processus indépendants** :
 
-```bash
-ip link set wlan0 down
-ip link set usb0 down
-```
+* Superviseur
+* Contrôle ressources
+* Tests réseau (async)
+* Monitoring / métriques
+* Vérification ingestion (optionnel)
 
-### Firewall minimal
+### Bénéfices
 
-```bash
-iptables -A OUTPUT -o eth0 -p tcp --dport 443 -j ACCEPT
-iptables -A OUTPUT -o eth0 -p udp --dport 53 -j ACCEPT
-iptables -P OUTPUT DROP
-iptables -P INPUT DROP
-```
+* Isolation mémoire
+* Résilience
+* Exploitation optimale des 4 cœurs
+* Pas de contention GIL critique
 
 ---
 
-## 11) Agent SOC
+## 11. Sécurité réseau
 
-Le projet inclut un **agent SOC Python** qui :
-
-* Orchestre toutes les phases
-* Surveille l’état du pipeline
-* Expose métriques Prometheus
-* Gère les retries
-* Contrôle l’utilisation CPU/RAM
-* Peut être lancé comme **service systemd**
-
-👉 L’agent est le **cerveau du système**.
+* Une seule interface active : **eth0**
+* Mode promiscuous activé
+* Firewall sortant strict (HTTPS + DNS)
+* Aucune exposition Internet
+* Administration uniquement LAN
 
 ---
 
-## 12) Amazon Q dans VS Code
+## 12. Observabilité et pilotage Web
 
-### Prérequis
+### Observabilité
 
-* Extension **AWS Toolkit / Amazon Q** installée
-* Profil AWS déjà configuré : **`moi33`**
-* Variables AWS déjà présentes
+* Prometheus : métriques
+* Grafana : dashboards SOC
+* OpenSearch : analyse sécurité
 
-### Configuration
+### Web Control Plane
 
-Dans VS Code :
+* Interface Web locale
+* Visualisation état pipeline
+* CPU / RAM / débit
+* Modification des paramètres
+* Redémarrage des services
+* Gestion Docker
 
-1. Ouvrir **AWS Toolkit**
-2. Sélectionner le profil **`moi33`**
-3. Vérifier la région (`eu-central-1`)
-
-### Utilisation avec ce projet
-
-Amazon Q peut :
-
-* Expliquer le code
-* Générer des tests
-* Vérifier la config AWS
-* Aider à déboguer Vector / Suricata
-
-Aucune configuration supplémentaire requise.
+Aucun accès SSH requis pour l’exploitation courante.
 
 ---
 
-## 13) Résumé final
+## 13. Automatisation et déploiement
 
-✔ Architecture robuste
-✔ Async & multithread contrôlé
-✔ Limites CPU/RAM respectées
-✔ Observabilité complète
-✔ Sécurité réseau stricte
-✔ Déploiement reproductible
-✔ Agent SOC central
-✔ Compatible Amazon Q / VS Code
+* Un **script unique** permet le déploiement complet
+* Idempotent et rejouable
+* Fonctionne après reset usine du Pi
+* Configure réseau, services, Docker, agent, GC
+* Démarrage automatique au boot
+
+---
+
+## 14. Exploitation et cycle de vie
+
+* Démarrage automatique
+* Supervision continue
+* Redémarrage en cas de crash
+* Mise à jour contrôlée
+* Reset complet possible
+* Extensible (forensic, IPS, ML…)
+
+---
+
+## 15. Résumé final
+
+✔ IDS passif haute performance
+✔ Architecture SOC moderne
+✔ Pipeline résilient et observable
+✔ Ressources strictement contrôlées
+✔ Automatisation complète
+✔ Pilotage Web local
+✔ Adapté Raspberry Pi 5
+✔ Prêt production 24/7

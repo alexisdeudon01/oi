@@ -5,17 +5,18 @@ import os
 import sys
 
 # Ajouter le répertoire des modules au PYTHONPATH
-sys.path.append(os.path.join(os.path.dirname(__file__), 'modules'))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'modules'))
 
-from config_manager import ConfigManager
-from resource_controller import ResourceController
-from aws_manager import AWSManager
-from connectivity_async import ConnectivityAsync
-from docker_manager import DockerManager
-from vector_manager import VectorManager
-from suricata_manager import SuricataManager
-from metrics_server import MetricsServer
-from git_workflow import GitWorkflow
+from modules.config_manager import ConfigManager
+from modules.resource_controller import ResourceController
+from modules.connectivity_async import ConnectivityAsync
+from modules.docker_manager import DockerManager
+from modules.vector_manager import VectorManager
+from modules.suricata_manager import SuricataManager
+from modules.metrics_server import MetricsServer
+from modules.git_workflow import GitWorkflow
+from modules.suricata_rules_manager import SuricataRulesManager
+from modules.web_interface_manager import WebInterfaceManager
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(processName)s - %(levelname)s - %(message)s')
 
@@ -37,31 +38,33 @@ class AgentSupervisor:
             'pipeline_ok': False,
             'docker_healthy': False,
             'last_error': '',
+            'ingestion_rate_increment': 0,
+            'error_increment': 0,
+            'redis_queue_depth': 0,
+            'suricata_rules_updated': False,
+            'web_interface_ready': False, # Ajout pour le suivi de l'interface Web
         })
-        self.shutdown_event = multiprocessing.Event() # Gérer l'événement d'arrêt séparément
+        self.shutdown_event = multiprocessing.Event()
         self.processes = []
         self.process_map = {
             "ResourceController": ResourceController,
             "ConnectivityAsync": ConnectivityAsync,
             "MetricsServer": MetricsServer,
-            # "VerificationProcess": VerificationProcess, # Optionnel, à implémenter plus tard
+            "SuricataRulesManager": SuricataRulesManager,
+            "WebInterfaceManager": WebInterfaceManager, # Ajout du gestionnaire d'interface Web
+            # "VerificationProcess": VerificationProcess,
         }
-        self.docker_manager = DockerManager(self.config_manager, self.shared_state)
-        self.vector_manager = VectorManager(self.config_manager, self.shared_state)
-        self.suricata_manager = SuricataManager(self.config_manager, self.shared_state)
-        self.git_workflow = GitWorkflow(self.config_manager)
+        self.docker_manager = DockerManager(self.shared_state, self.config_manager)
+        self.vector_manager = VectorManager(self.shared_state, self.config_manager)
+        self.suricata_manager = SuricataManager(self.shared_state, self.config_manager)
+        self.git_workflow = GitWorkflow(self.shared_state, self.config_manager)
 
     def _start_child_process(self, name, target_class):
         """
         Démarre un processus enfant et l'ajoute à la liste des processus.
         Passe l'événement d'arrêt aux processus enfants.
         """
-        # Les processus ResourceController et MetricsServer n'ont pas besoin de l'événement d'arrêt directement
-        # car ils sont gérés par le superviseur. ConnectivityAsync pourrait en avoir besoin pour des arrêts plus fins.
-        if name == "ConnectivityAsync":
-            instance = target_class(self.shared_state, self.config_manager, self.shutdown_event)
-        else:
-            instance = target_class(self.shared_state, self.config_manager)
+        instance = target_class(self.shared_state, self.config_manager, self.shutdown_event)
         
         process = multiprocessing.Process(target=instance.run, name=name)
         self.processes.append(process)
@@ -114,27 +117,37 @@ class AgentSupervisor:
             logging.critical("L'agent doit s'exécuter sur la branche 'dev'. Arrêt.")
             sys.exit(1)
 
-        # 2. Préparation de la pile Docker (en parallèle)
-        # La construction et le démarrage de Docker peuvent être longs, mais ne bloquent pas la génération de config
-        docker_prep_success = self.docker_manager.prepare_docker_stack()
-        if not docker_prep_success:
-            logging.critical("Échec de la préparation de la pile Docker. Arrêt.")
-            sys.exit(1)
-        
-        # 3. Génération des configurations (en parallèle)
+        # 2. Génération des configurations
         self.vector_manager.generate_vector_config()
         self.suricata_manager.generate_suricata_config()
 
+        # 3. Préparation et démarrage de Suricata (hors Docker)
+        logging.info("Démarrage de Suricata sur l'hôte...")
+        if not self.suricata_manager.start_suricata():
+            logging.critical("Échec du démarrage de Suricata. Arrêt.")
+            self._graceful_shutdown()
+            sys.exit(1)
+        logging.info("Suricata démarré avec succès.")
+
+        # 4. Préparation de la pile Docker
+        docker_prep_success = self.docker_manager.prepare_docker_stack()
+        if not docker_prep_success:
+            logging.critical("Échec de la préparation de la pile Docker. Arrêt.")
+            self._graceful_shutdown()
+            sys.exit(1)
+        
         # Démarrer les processus de contrôle et de métriques tôt
         self._start_child_process("ResourceController", ResourceController)
         self._start_child_process("MetricsServer", MetricsServer)
+        self._start_child_process("SuricataRulesManager", SuricataRulesManager)
+        self._start_child_process("WebInterfaceManager", WebInterfaceManager) # Démarrer le gestionnaire d'interface Web
 
-        # Attendre que la pile Docker soit saine (séquentiel)
+        # Attendre que la pile Docker soit saine
         logging.info("Attente de la santé de la pile Docker...")
-        max_wait_time = 120 # secondes
+        max_wait_time = 120
         start_time = time.time()
         while not self.shared_state.get('docker_healthy', False) and (time.time() - start_time) < max_wait_time:
-            self.docker_manager.check_stack_health() # Met à jour shared_state['docker_healthy']
+            self.docker_manager.check_stack_health()
             time.sleep(5)
         
         if not self.shared_state.get('docker_healthy', False):
