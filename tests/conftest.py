@@ -137,3 +137,19 @@ def pytest_addoption(parser):
     )
 
 
+
+
+# ==============================================================================
+# Fixtures Infrastructure (AWS, Config Validator)
+# ==============================================================================
+
+from fixtures.infra_fixtures import (
+    mock_boto3_session,
+    mock_opensearch_client,
+    aws_config,
+    invalid_aws_config,
+    valid_config_yaml,
+    invalid_config_yaml,
+    mock_config_file,
+    mock_invalid_config_file,
+)
