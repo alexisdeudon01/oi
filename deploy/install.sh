@@ -9,16 +9,27 @@ if [ "$EUID" -ne 0 ]; then
   exit 1
 fi
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+ROOT_DIR="$(dirname "$SCRIPT_DIR")"
+OWNER_USER="${SUDO_USER:-pi}"
+
+export DEBIAN_FRONTEND=noninteractive
+export DEBCONF_NONINTERACTIVE_SEEN=true
+export APT_LISTCHANGES_FRONTEND=none
+
 echo "Mise à jour du système..."
-apt update && apt upgrade -y
+apt-get update && apt-get upgrade -y
 
 echo "Installation des dépendances système..."
-apt install -y python3-pip python3-venv git curl gnupg2 apt-transport-https ca-certificates software-properties-common suricata # Ajout de suricata
+apt-get install -y python3-venv python3-pip curl gnupg apt-transport-https ca-certificates suricata
 
 echo "Installation de Docker..."
+# Supprimer les paquets Docker potentiellement conflictuels
+apt-get remove -y docker docker.io docker-doc docker-compose podman-docker containerd runc || true
+
 # Ajouter la clé GPG officielle de Docker
 install -m 0555 -d /etc/apt/keyrings
-curl -fsSL https://download.docker.com/linux/debian/gpg | gpg --dearmor -o /etc/apt/keyrings/docker.gpg
+curl -fsSL https://download.docker.com/linux/debian/gpg | gpg --batch --yes --no-tty --dearmor -o /etc/apt/keyrings/docker.gpg
 chmod a+r /etc/apt/keyrings/docker.gpg
 
 # Ajouter le dépôt Docker à APT sources
@@ -27,15 +38,19 @@ echo \
   $(. /etc/os-release && echo "$VERSION_CODENAME") stable" | \
   tee /etc/apt/sources.list.d/docker.list > /dev/null
 
-apt update
-apt install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+apt-get update
+apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
 
 # Ajouter l'utilisateur 'pi' au groupe docker
 usermod -aG docker pi
 
-echo "Installation des dépendances Python..."
-# Naviguer vers le répertoire python_env et installer les dépendances
-(cd python_env && python3 -m venv .venv && source .venv/bin/activate && pip install -r requirements.txt)
+echo "Installation des dépendances Python (venv)..."
+if [ ! -d "$ROOT_DIR/.venv" ]; then
+  python3 -m venv "$ROOT_DIR/.venv"
+fi
+"$ROOT_DIR/.venv/bin/pip" install --upgrade pip
+"$ROOT_DIR/.venv/bin/pip" install -r "$ROOT_DIR/requirements.txt"
+chown -R "$OWNER_USER":"$OWNER_USER" "$ROOT_DIR/.venv"
 
 echo "Rendre les scripts de déploiement exécutables..."
 chmod +x deploy/*.sh

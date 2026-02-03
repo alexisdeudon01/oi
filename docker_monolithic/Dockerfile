@@ -3,13 +3,14 @@ FROM debian:trixie-slim
 
 
 # Définir les variables d'environnement
-ENV DEBIAN_FRONTEND=noninteractive
-ENV PYTHONUNBUFFERED=1
+ENV DEBIAN_FRONTEND=noninteractive \
+    PYTHONUNBUFFERED=1 \
+    PYTHONPATH=/app/src
 
 # Mettre à jour le système et installer les dépendances de base
 RUN apt update && apt upgrade -y && \
     apt install -y --no-install-recommends \
-    python3 python3-pip python3-venv git curl wget gnupg2 \
+    python3 python3-pip curl wget gnupg2 \
     lsb-release ca-certificates software-properties-common \
     # Dépendances pour Suricata
     libpcap-dev libnet1-dev libyaml-0-2 libjansson4 libcap-ng0 libmagic1 \
@@ -53,12 +54,12 @@ RUN apt install -y redis-server && \
 
 # --- Configuration de l'environnement Python ---
 WORKDIR /app
-COPY python_env/requirements.txt .
-RUN python3 -m venv .venv && \
-    /bin/bash -c "source .venv/bin/activate && pip install --no-cache-dir -r requirements.txt"
+COPY requirements.txt .
+RUN pip3 install --no-cache-dir --upgrade pip && \
+    pip3 install --no-cache-dir -r requirements.txt
 
 # Copier le code de l'agent Python et les configurations
-COPY python_env/ ./python_env/
+COPY src/ ./src/
 COPY config.yaml ./
 COPY suricata/ ./suricata/
 COPY vector/ ./vector/
@@ -77,4 +78,5 @@ EXPOSE 9100
 
 # Commande par défaut pour exécuter l'agent Python
 # L'agent Python sera le point d'entrée principal et orchestrera Suricata, Vector et Redis.
-CMD ["/bin/bash", "-c", "source .venv/bin/activate && python3 python_env/main.py"]
+# Note: Suricata doit être exécuté en systemd sur le host, pas dans Docker
+CMD ["python3", "-m", "ids.app.supervisor"]

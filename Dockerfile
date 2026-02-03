@@ -1,6 +1,6 @@
 # IDS Agent - Multi-stage Dockerfile
 # Stage 1: Builder
-FROM python:3.11-slim as builder
+FROM python:3.11-slim AS builder
 
 WORKDIR /app
 
@@ -13,15 +13,12 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # Copy requirements first for caching
 COPY requirements.txt pyproject.toml ./
 
-# Create virtual environment and install dependencies
-RUN python -m venv /opt/venv
-ENV PATH="/opt/venv/bin:$PATH"
-
+# Install dependencies system-wide
 RUN pip install --no-cache-dir --upgrade pip wheel setuptools \
     && pip install --no-cache-dir -r requirements.txt
 
 # Stage 2: Runtime
-FROM python:3.11-slim as runtime
+FROM python:3.11-slim AS runtime
 
 LABEL maintainer="SIXT R&D Team <dev@sixt.com>"
 LABEL description="IDS Agent for Raspberry Pi - Security monitoring with Suricata"
@@ -32,9 +29,8 @@ RUN groupadd -r ids && useradd -r -g ids ids
 
 WORKDIR /app
 
-# Copy virtual environment from builder
-COPY --from=builder /opt/venv /opt/venv
-ENV PATH="/opt/venv/bin:$PATH"
+# Copy Python dependencies from builder
+COPY --from=builder /usr/local /usr/local
 
 # Copy application code
 COPY src/ ./src/
@@ -57,5 +53,5 @@ USER ids
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
     CMD python -c "import sys; sys.exit(0)"
 
-# Default command - run tests
-CMD ["python", "-m", "pytest", "tests/", "-v", "--tb=short"]
+# Default command - run agent
+CMD ["python", "-m", "ids.app.supervisor", "/app/config.yaml"]

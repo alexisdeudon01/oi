@@ -84,8 +84,14 @@ def config_manager_test(tmp_path, config_dict_test) -> ConfigManager:
     config_file = tmp_path / "config_test.yaml"
     with open(config_file, 'w') as f:
         yaml.dump(config_dict_test, f)
-    
-    return ConfigManager(str(config_file))
+
+    secret_file = tmp_path / "secret.json"
+    secret_file.write_text(
+        '{"aws": {"access_key_id": "AKIA_TEST", "secret_access_key": "SECRET_TEST"}}',
+        encoding="utf-8",
+    )
+
+    return ConfigManager(str(config_file), secret_path=str(secret_file))
 
 
 @pytest.fixture

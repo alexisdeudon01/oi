@@ -11,7 +11,7 @@ Ce document détaille la refactorisation complète du système IDS pour adopter 
 ### ❌ Problèmes Identifiés dans la Structure Actuelle
 
 ```
-python_env/
+legacy_app/
 ├── main.py              # 351 lignes - trop responsable
 ├── modules/             # 13 fichiers plats - pas de groupement logique
 │   ├── base_component.py
@@ -121,10 +121,6 @@ ids/                                    # Nouveau répertoire racine du projet
 │       ├── __init__.py
 │       ├── mock_suricata.py
 │       └── mock_aws.py
-│
-├── .github/
-│   └── workflows/
-│       └── ci-cd.yml                  # Pipeline CI/CD Tailscale
 │
 ├── pyproject.toml                      # Nouvelle gestion de dépendances
 ├── requirements.txt                    # + punq, pydantic, pytest-markers
@@ -347,12 +343,13 @@ addopts = -v --strict-markers --cov=src/ids
 
 ### Phase 6️⃣ : Pipeline CI/CD (1-2 jours)
 
-**Fichier** : `.github/workflows/ci-cd.yml`
+**Fichier** : `deploy/push_to_pi.sh` (script de déploiement)
 
 **Fonctionnalités** :
-- Tests automatiques sur push/PR
-- Déploiement Tailscale sur Raspberry Pi
-- Secrets GitHub pour SSH et Tailscale Auth Key
+- Vérification de connectivité (SSH, AWS, Docker)
+- Build et push de l'image Docker vers le Pi
+- Synchronisation des fichiers nécessaires
+- Activation des services systemd et Docker Compose
 
 ---
 

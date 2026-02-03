@@ -169,7 +169,7 @@ Trafic réseau (mirroring)
 
 ### systemd (host)
 
-* `ids2-network.service` : force `eth0` uniquement
+* `network-eth0-only.service` : force `eth0` uniquement
 * `suricata.service` : capture IDS
 * `ids2-agent.service` : orchestration SOC
 
@@ -283,23 +283,30 @@ L’agent est découpé en **processus indépendants** :
 
 ### Web Control Plane
 
-* Interface Web locale
-* Visualisation état pipeline
+* Endpoint HTTP `/status` pour le statut du pipeline
+* Endpoint `/health` pour health check
+* Visualisation état pipeline (composants, métriques)
 * CPU / RAM / débit
-* Modification des paramètres
-* Redémarrage des services
+* Modification des paramètres (via API)
+* Redémarrage des services (via API)
 * Gestion Docker
 
-Aucun accès SSH requis pour l’exploitation courante.
+Aucun accès SSH requis pour l'exploitation courante.
 
 ---
 
 ## 13. Automatisation et déploiement
 
-* Un **script unique** permet le déploiement complet
+* Le script `deploy/push_to_pi.sh` ou `python -m ids.deploy.pi_uploader` permet le déploiement complet
+* Vérifie la connectivité (SSH, Docker, AWS)
+* Build et push de l'image Docker vers le Pi
+* Synchronise les fichiers nécessaires (config, secrets, code)
+* Les credentials AWS sont fournis via `secret.json` (copier `secret.json.example`)
+* Génère `docker/.env` pour injecter AWS/endpoint dans Docker Compose
+* Active les services systemd et Docker Compose
 * Idempotent et rejouable
 * Fonctionne après reset usine du Pi
-* Configure réseau, services, Docker, agent, GC
+* Configure réseau, services, Docker, agent
 * Démarrage automatique au boot
 
 ---

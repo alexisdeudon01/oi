@@ -10,30 +10,32 @@ services:
       - /var/lib/vector/redis_buffer:/var/lib/vector/redis_buffer # Tampon disque pour Redis fallback
       - /var/lib/vector/opensearch_buffer:/var/lib/vector/opensearch_buffer # Tampon disque pour OpenSearch
     environment:
-      # Variables d'environnement pour l'authentification AWS si nécessaire
-      # AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID}
-      # AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY}
-      # AWS_REGION: ${AWS_REGION}
-      VECTOR_SELF_THROTTLING_LEVEL: 0 # Sera mis à jour par l'agent Python
+      # Variables d'environnement pour l'authentification AWS
+      # Chargees depuis secret.json via l'agent Python
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:-}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:-}
+      AWS_REGION: ${AWS_REGION:-eu-central-1}
+      OPENSEARCH_ENDPOINT: ${OPENSEARCH_ENDPOINT:-}
+      VECTOR_SELF_THROTTLING_LEVEL: 0 # Sera mis a jour par l'agent Python
     deploy:
       resources:
         limits:
-          cpus: "${DOCKER_VECTOR_CPU:-1.0}" # 1 cœur pour Vector
+          cpus: "${DOCKER_VECTOR_CPU:-1.0}" # 1 coeur pour Vector
           memory: "${DOCKER_VECTOR_RAM_MB:-1024}M" # ~1 GB RAM pour Vector
     depends_on:
-      - redis # Vector dépend de Redis pour le fallback
+      - redis
     restart: unless-stopped
 
   redis:
     image: redis:7-alpine
     command: ["redis-server", "--appendonly", "yes"]
     volumes:
-      - redis_data:/data # Persistance des données Redis
+      - redis_data:/data
     deploy:
       resources:
         limits:
-          cpus: "${DOCKER_REDIS_CPU:-0.5}" # Faible utilisation CPU
-          memory: "${DOCKER_REDIS_RAM_MB:-512}M" # ~512 MB RAM pour Redis
+          cpus: "${DOCKER_REDIS_CPU:-0.5}"
+          memory: "${DOCKER_REDIS_RAM_MB:-512}M"
     restart: unless-stopped
 
   prometheus:
@@ -50,11 +52,11 @@ services:
     deploy:
       resources:
         limits:
-          cpus: "${DOCKER_PROMETHEUS_CPU:-0.2}" # Faible utilisation CPU
-          memory: "${DOCKER_PROMETHEUS_RAM_MB:-256}M" # Ajusté pour être plus faible
+          cpus: "${DOCKER_PROMETHEUS_CPU:-0.2}"
+          memory: "${DOCKER_PROMETHEUS_RAM_MB:-256}M"
     depends_on:
-      - node_exporter # Prometheus scrape node_exporter
-      - cadvisor # Prometheus scrape cadvisor
+      - node_exporter
+      - cadvisor
     restart: unless-stopped
 
   grafana:
@@ -66,10 +68,30 @@ services:
     deploy:
       resources:
         limits:
-          cpus: "${DOCKER_GRAFANA_CPU:-0.2}" # Faible utilisation CPU
-          memory: "${DOCKER_GRAFANA_RAM_MB:-256}M" # Ajusté pour être plus faible
+          cpus: "${DOCKER_GRAFANA_CPU:-0.2}"
+          memory: "${DOCKER_GRAFANA_RAM_MB:-256}M"
     depends_on:
       - prometheus
+    restart: unless-stopped
+
+  fastapi:
+    build:
+      context: ..
+      dockerfile: docker/fastapi/Dockerfile
+    image: ids2-fastapi:latest
+    working_dir: /app
+    volumes:
+      - ../src:/app/src:ro
+    environment:
+      PYTHONPATH: /app/src
+    command: ["uvicorn", "ids.app.api_status:app", "--host", "0.0.0.0", "--port", "8080"]
+    ports:
+      - "8080:8080"
+    deploy:
+      resources:
+        limits:
+          cpus: "${DOCKER_FASTAPI_CPU:-0.5}"
+          memory: "${DOCKER_FASTAPI_RAM_MB:-256}M"
     restart: unless-stopped
 
   cadvisor:
@@ -81,13 +103,13 @@ services:
       - /var/lib/docker/:/var/lib/docker:ro
       - /dev/disk/:/dev/disk:ro
     ports:
-      - "8080:8080"
+      - "8081:8080"
     privileged: true
     deploy:
       resources:
         limits:
-          cpus: "${DOCKER_CADVISOR_CPU:-0.1}" # Ajusté pour être plus faible
-          memory: "${DOCKER_CADVISOR_RAM_MB:-64}M" # Ajusté pour être plus faible
+          cpus: "${DOCKER_CADVISOR_CPU:-0.1}"
+          memory: "${DOCKER_CADVISOR_RAM_MB:-64}M"
     restart: unless-stopped
 
   node_exporter:

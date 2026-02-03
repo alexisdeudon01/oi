@@ -1,7 +1,7 @@
 """Unit tests for domain models."""
 import pytest
 from datetime import datetime
-from ids.domain import AlerteIDS, SeveriteAlerte, TypeAlerte
+from ids.domain.alerte import AlerteIDS, SeveriteAlerte, TypeAlerte
 
 
 class TestAlerteIDS:

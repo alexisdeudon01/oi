@@ -26,8 +26,8 @@ echo "Suppression des répertoires de logs RAM (si existants)..."
 sudo rm -f /mnt/ram_logs/eve.json
 
 echo "Nettoyage des répertoires du projet..."
-rm -rf python_env/__pycache__
-rm -rf python_env/modules/__pycache__
+rm -rf src/__pycache__
+rm -rf src/ids/**/__pycache__
 rm -rf docker/grafana/* # Supprimer le contenu de grafana, pas le répertoire lui-même
 rm -rf docker/prometheus.yml # Supprimer le fichier prometheus.yml généré
 rm -rf vector/* # Supprimer le contenu de vector, pas le répertoire lui-même

@@ -1,9 +1,8 @@
 aws:
-  access_key_id: "YOUR_AWS_ACCESS_KEY_ID" # Remplacer par votre clé d'accès AWS
-  secret_access_key: "YOUR_AWS_SECRET_ACCESS_KEY" # Remplacer par votre clé secrète AWS
   region: "eu-central-1"
   domain_name: "suricata-prod"
-  opensearch_endpoint: "" # Sera rempli après le provisioning du domaine
+  opensearch_endpoint: "search-suricata-prod-wnz4vkegm72j5gefcf4vf27zne.eu-central-1.es.amazonaws.com"# Sera rempli après le provisioning du domaine
+  # Note: access_key_id et secret_access_key sont dans secret.json
 
 raspberry_pi: # Renommé de 'sensor' pour être plus générique
   home_net: "192.168.178.0/24"
@@ -72,14 +71,11 @@ docker:
   fastapi_cpu: 0.5 # Limites CPU pour FastAPI
   fastapi_ram_mb: 256 # Limites RAM pour FastAPI
 
-git:
-  branch: "dev"
-
 connectivity:
   check_interval: 10
   max_retries: 5
   initial_backoff: 1
 
 fastapi: # Nouvelle section pour la configuration FastAPI
-  port: 8000
+  port: 8080
   host: "0.0.0.0"

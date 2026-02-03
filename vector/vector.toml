@@ -57,13 +57,12 @@ buffer.max_size = 10 GiB
 [sinks.opensearch_sink]
 type = "elasticsearch"
 inputs = ["parse_json"]
-endpoint = "https://your-opensearch-domain.eu-west-1.es.amazonaws.com" # Remplacer par votre endpoint OpenSearch
+endpoint = "${OPENSEARCH_ENDPOINT}"
 index = "ids2-logs-%Y.%m.%d" # Index quotidien
 auth.strategy = "aws"
-auth.region = "eu-west-1"
-# auth.access_key_id = "$AWS_ACCESS_KEY_ID" # Peut être configuré via variables d'environnement Docker
-# auth.secret_access_key = "$AWS_SECRET_ACCESS_KEY"
-# auth.session_token = "$AWS_SESSION_TOKEN"
+auth.region = "${AWS_REGION}"
+auth.access_key_id = "${AWS_ACCESS_KEY_ID}"
+auth.secret_access_key = "${AWS_SECRET_ACCESS_KEY}"
 compression = "gzip"
 batch.max_events = 500 # Taille de lot optimisée pour Pi
 batch.timeout_secs = 2
