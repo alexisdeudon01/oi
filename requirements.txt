@@ -31,6 +31,10 @@ pyvis>=0.3.2  # Interactive network visualization
 networkx>=3.0  # Graph data structures
 tailscale>=0.6.0  # Tailscale API client
 
+# Infrastructure Management
+paramiko>=3.0.0  # SSH client for Raspberry Pi
+gpiozero>=2.0.0  # Raspberry Pi GPIO (optional, only on Pi)
+
 # API & Control Plane
 fastapi>=0.110.0  # Status endpoint
 uvicorn>=0.23.0  # ASGI server
