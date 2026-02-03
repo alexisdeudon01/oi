@@ -8,7 +8,6 @@ import sys
 from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Dict, List, Optional, Tuple
-
 import networkx as nx
 import requests
 from pyvis.network import Network

@@ -283,12 +283,13 @@ class TailnetMonitor:
             )
 
         # Add legend as a note
+        latency_text = f"{snapshot.average_latency_ms:.2f} ms" if snapshot.average_latency_ms else "N/A"
         legend_html = f"""
         <div style="position:absolute;top:10px;left:10px;background:#161b22;padding:15px;border-radius:8px;border:1px solid #30363d;">
             <b style="color:#c9d1d9;">Network Health Map</b><br>
             <small style="color:#8b949e;">
                 Snapshot: {snapshot.timestamp}<br>
-                Avg Latency: {snapshot.average_latency_ms:.2f} ms<br>
+                Avg Latency: {latency_text}<br>
                 <span style="color:#238636;">●</span> Online &nbsp;
                 <span style="color:#da3633;">●</span> Offline<br>
                 <i>Larger nodes = lower latency</i>

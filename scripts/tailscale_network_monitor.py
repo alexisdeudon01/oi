@@ -238,7 +238,7 @@ class TailnetMonitor:
 Network Snapshot: {snapshot.timestamp}
 Total Nodes: {snapshot.total_nodes}
 Online Nodes: {snapshot.online_nodes}
-Average Latency: {snapshot.average_latency:.2f}ms if snapshot.average_latency else 'N/A'
+Average Latency: {f"{snapshot.average_latency:.2f}ms" if snapshot.average_latency else 'N/A'}
         """.strip()
         
         # Save to HTML

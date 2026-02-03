@@ -90,18 +90,24 @@ if [[ -n "$MAP_FILE" ]]; then
     SECRET_MAP["$target"]="$source"
   done < "$MAP_FILE"
 else
+  # Default mapping: required secrets
   for name in \
     TAILSCALE_OAUTH_CLIENT_ID \
     TAILSCALE_OAUTH_CLIENT_SECRET \
     TAILSCALE_TAILNET \
     TAILSCALE_API_KEY \
+    RASPBERRY_PI_TAILSCALE_IP \
+    RASPBERRY_PI_USER \
+    RASPBERRY_PI_SSH_KEY; do
+    SECRET_MAP["$name"]="$name"
+  done
+  
+  # Optional secrets (AWS, monitoring, etc.)
+  for name in \
     AWS_ACCESS_KEY_ID \
     AWS_SECRET_ACCESS_KEY \
     AWS_SESSION_TOKEN \
     AWS_REGION \
-    RASPBERRY_PI_TAILSCALE_IP \
-    RASPBERRY_PI_USER \
-    RASPBERRY_PI_SSH_KEY \
     SONAR_TOKEN \
     SLACK_WEBHOOK_URL; do
     SECRET_MAP["$name"]="$name"
@@ -115,27 +121,68 @@ fi
 
 updated=0
 missing=()
+optional_missing=()
+
+# Required secrets that must be present
+REQUIRED_SECRETS=(
+  "TAILSCALE_OAUTH_CLIENT_ID"
+  "TAILSCALE_OAUTH_CLIENT_SECRET"
+  "TAILSCALE_TAILNET"
+  "TAILSCALE_API_KEY"
+  "RASPBERRY_PI_TAILSCALE_IP"
+  "RASPBERRY_PI_USER"
+  "RASPBERRY_PI_SSH_KEY"
+)
 
 for target in "${!SECRET_MAP[@]}"; do
   source="${SECRET_MAP[$target]}"
   value="${!source-}"
+  
   if [[ -z "$value" ]]; then
-    missing+=("${target} (env:${source})")
+    # Check if this is a required secret
+    is_required=0
+    for req in "${REQUIRED_SECRETS[@]}"; do
+      if [[ "$target" == "$req" ]]; then
+        is_required=1
+        break
+      fi
+    done
+    
+    if [[ $is_required -eq 1 ]]; then
+      missing+=("${target} (env:${source})")
+    else
+      optional_missing+=("${target} (env:${source})")
+    fi
     continue
   fi
+  
   printf '%s' "$value" | gh secret set "$target" --repo "$REPO"
-  echo "Set secret: ${target} (from ${source})"
+  echo "✓ Set secret: ${target} (from ${source})"
   updated=$((updated + 1))
 done
 
-if [[ $updated -eq 0 ]]; then
-  echo "No secrets were updated. Check your env vars or mapping file." >&2
-  exit 1
-fi
+echo ""
+echo "Summary: ${updated} secret(s) synced to GitHub Actions"
 
 if [[ ${#missing[@]} -gt 0 ]]; then
-  echo "Missing env vars for the following targets:" >&2
+  echo ""
+  echo "❌ Missing required env vars:" >&2
   for item in "${missing[@]}"; do
     echo "  - ${item}" >&2
   done
+  exit 1
+fi
+
+if [[ ${#optional_missing[@]} -gt 0 ]]; then
+  echo ""
+  echo "⚠️  Optional secrets not set (will be skipped in CI):"
+  for item in "${optional_missing[@]}"; do
+    echo "  - ${item}"
+  done
+fi
+
+if [[ $updated -eq 0 ]]; then
+  echo ""
+  echo "❌ No secrets were updated. Check your env vars or mapping file." >&2
+  exit 1
 fi
