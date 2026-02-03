@@ -150,13 +150,13 @@ if [[ -z "$TAILSCALE_API_KEY" ]]; then
   echo
 fi
 if [[ -z "$AWS_ACCESS_KEY_ID" ]]; then
-  read -rp "AWS access key id: " AWS_ACCESS_KEY_ID
+  read -rp "AWS access key id (optional, press Enter to skip): " AWS_ACCESS_KEY_ID
 fi
-if [[ -z "$AWS_SECRET_ACCESS_KEY" ]]; then
+if [[ -n "$AWS_ACCESS_KEY_ID" && -z "$AWS_SECRET_ACCESS_KEY" ]]; then
   read -rsp "AWS secret access key: " AWS_SECRET_ACCESS_KEY
   echo
 fi
-if [[ -z "$AWS_REGION" ]]; then
+if [[ -n "$AWS_ACCESS_KEY_ID" && -z "$AWS_REGION" ]]; then
   default_region=""
   if [[ -f "$ROOT_DIR/config.yaml" ]]; then
     default_region="$(grep -E '^[[:space:]]*region:' "$ROOT_DIR/config.yaml" | head -1 | sed -E 's/^[[:space:]]*region:[[:space:]]*\"?([^\"[:space:]]+)\"?.*/\\1/')"
@@ -169,7 +169,7 @@ if [[ -z "$AWS_REGION" ]]; then
   AWS_REGION="${AWS_REGION:-$default_region}"
   AWS_REGION="${AWS_REGION:-us-east-1}"
 fi
-if [[ -z "$AWS_SESSION_TOKEN" ]]; then
+if [[ -n "$AWS_ACCESS_KEY_ID" && -z "$AWS_SESSION_TOKEN" ]]; then
   read -rp "AWS session token (optional): " AWS_SESSION_TOKEN
 fi
 
@@ -181,9 +181,9 @@ if [[ -z "$TS_OAUTH_CLIENT_ID" || -z "$TS_OAUTH_CLIENT_SECRET" || -z "$TAILSCALE
   echo "Tailscale OAuth client, tailnet, and API key are required." >&2
   exit 1
 fi
-if [[ -z "$AWS_ACCESS_KEY_ID" || -z "$AWS_SECRET_ACCESS_KEY" || -z "$AWS_REGION" ]]; then
-  echo "AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, and AWS_REGION are required." >&2
-  exit 1
+# AWS is optional
+if [[ -z "$AWS_ACCESS_KEY_ID" && -z "$AWS_SECRET_ACCESS_KEY" ]]; then
+  echo "AWS credentials not provided; AWS check will be skipped in CI."
 fi
 
 if [[ "$PI_IP" == http://* || "$PI_IP" == https://* ]]; then
@@ -221,12 +221,26 @@ printf '%s' "$TS_OAUTH_CLIENT_ID" | gh secret set TS_OAUTH_CLIENT_ID "${SECRET_A
 printf '%s' "$TS_OAUTH_CLIENT_SECRET" | gh secret set TS_OAUTH_CLIENT_SECRET "${SECRET_ARGS[@]}"
 printf '%s' "$TAILSCALE_TAILNET" | gh secret set TAILSCALE_TAILNET "${SECRET_ARGS[@]}"
 printf '%s' "$TAILSCALE_API_KEY" | gh secret set TAILSCALE_API_KEY "${SECRET_ARGS[@]}"
-printf '%s' "$AWS_ACCESS_KEY_ID" | gh secret set AWS_ACCESS_KEY_ID "${SECRET_ARGS[@]}"
-printf '%s' "$AWS_SECRET_ACCESS_KEY" | gh secret set AWS_SECRET_ACCESS_KEY "${SECRET_ARGS[@]}"
-printf '%s' "$AWS_REGION" | gh secret set AWS_REGION "${SECRET_ARGS[@]}"
-if [[ -n "$AWS_SESSION_TOKEN" ]]; then
-  printf '%s' "$AWS_SESSION_TOKEN" | gh secret set AWS_SESSION_TOKEN "${SECRET_ARGS[@]}"
-fi
 gh secret set PI "${SECRET_ARGS[@]}" < "$SSH_KEY_PATH"
 
-echo "Codespaces secrets set: PI_IP, PI_USER, TS_OAUTH_CLIENT_ID, TS_OAUTH_CLIENT_SECRET, TAILSCALE_TAILNET, TAILSCALE_API_KEY, AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, AWS_REGION, AWS_SESSION_TOKEN, PI"
+SECRETS_SET="PI_IP, PI_USER, TS_OAUTH_CLIENT_ID, TS_OAUTH_CLIENT_SECRET, TAILSCALE_TAILNET, TAILSCALE_API_KEY, PI"
+
+# AWS secrets are optional
+if [[ -n "$AWS_ACCESS_KEY_ID" ]]; then
+  printf '%s' "$AWS_ACCESS_KEY_ID" | gh secret set AWS_ACCESS_KEY_ID "${SECRET_ARGS[@]}"
+  SECRETS_SET="${SECRETS_SET}, AWS_ACCESS_KEY_ID"
+fi
+if [[ -n "$AWS_SECRET_ACCESS_KEY" ]]; then
+  printf '%s' "$AWS_SECRET_ACCESS_KEY" | gh secret set AWS_SECRET_ACCESS_KEY "${SECRET_ARGS[@]}"
+  SECRETS_SET="${SECRETS_SET}, AWS_SECRET_ACCESS_KEY"
+fi
+if [[ -n "$AWS_REGION" ]]; then
+  printf '%s' "$AWS_REGION" | gh secret set AWS_REGION "${SECRET_ARGS[@]}"
+  SECRETS_SET="${SECRETS_SET}, AWS_REGION"
+fi
+if [[ -n "$AWS_SESSION_TOKEN" ]]; then
+  printf '%s' "$AWS_SESSION_TOKEN" | gh secret set AWS_SESSION_TOKEN "${SECRET_ARGS[@]}"
+  SECRETS_SET="${SECRETS_SET}, AWS_SESSION_TOKEN"
+fi
+
+echo "Codespaces secrets set: ${SECRETS_SET}"
