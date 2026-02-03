@@ -95,7 +95,7 @@ class TailnetMonitor:
         """
         try:
             output = subprocess.check_output(
-                ["tailscale", "ping", "--c", str(count), target_ip],
+                ["tailscale", "ping", "-c", str(count), target_ip],
                 timeout=5,
                 stderr=subprocess.DEVNULL,
             ).decode()

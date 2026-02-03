@@ -193,10 +193,9 @@ def run_manager() -> None:
     snapshot = monitor.get_current_state()
     avg_latency = monitor.ping_online_nodes(snapshot)
 
-    print(
-        f"Nodes: {snapshot.total_nodes} ({snapshot.online_nodes} online) | "
-        f"Avg latency: {avg_latency:.2f} ms" if avg_latency >= 0 else "Avg latency: N/A"
-    )
+    nodes_info = f"Nodes: {snapshot.total_nodes} ({snapshot.online_nodes} online)"
+    latency_info = f"Avg latency: {avg_latency:.2f} ms" if avg_latency >= 0 else "Avg latency: N/A"
+    print(f"{nodes_info} | {latency_info}")
 
     output_file = os.path.abspath("network_health_map.html")
     monitor.generate_interactive_graph(snapshot, output_file)

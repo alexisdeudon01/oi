@@ -120,6 +120,9 @@ jobs:
           asyncio.run(main())
           PY
       
+      - name: 📥 Checkout code (for network visualization)
+        uses: actions/checkout@v4
+      
       - name: 📊 Generate Network Health Map
         if: success()
         env:
@@ -127,7 +130,6 @@ jobs:
           TAILSCALE_API_KEY: ${{ secrets.TAILSCALE_API_KEY }}
         run: |
           python - <<'PY'
-          import asyncio
           import os
           import sys
           sys.path.insert(0, "src")
@@ -147,14 +149,16 @@ jobs:
           
           monitor.generate_interactive_graph(snapshot, "network_health_map.html")
           PY
+        continue-on-error: true
       
       - name: 📤 Upload Network Health Map
-        if: success()
+        if: always()
         uses: actions/upload-artifact@v3
         with:
           name: network-health-map
           path: network_health_map.html
           retention-days: 7
+        continue-on-error: true
 
   # =========================================================================
   # Job 2: Tests Unitaires & Intégration
