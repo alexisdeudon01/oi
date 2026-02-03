@@ -1,219 +1,150 @@
 """
-Injection de Dépendances - Conteneur DI avec punq.
-
-Gère l'enregistrement et la résolution de tous les services du système.
-Suit le pattern Inversion of Control (IoC).
+Injection de dependances - conteneur DI avec punq.
 """
 
-from typing import Dict, Any, Type, TypeVar, Optional, Callable
+from pathlib import Path as _Path
+from typing import Any, Callable, Dict, Type, TypeVar, Union
 import logging
 from functools import lru_cache
 
 try:
     import punq
-except ImportError:
+except ImportError as exc:  # pragma: no cover - runtime safeguard
     raise ImportError(
-        "punq n'est pas installé. "
-        "Installez-le avec: pip install punq"
-    )
+        "punq n'est pas installe. Installez-le avec: pip install punq"
+    ) from exc
 
 from ..domain import ConfigurationIDS
-from ..interfaces import (
-    AlerteSource,
-    GestionnaireComposant,
-    GestionnaireConfig,
+from ..composants import (
+    ConnectivityChecker,
+    DockerManager,
+    MetricsCollector,
+    ResourceController,
+    VectorManager,
 )
 from ..config.loader import ConfigManager
+from ..interfaces import (
+    AlerteSource,
+    GestionnaireConfig,
+    MetriquesProvider,
+    PersistanceAlertes,
+)
+from ..infrastructure import AWSOpenSearchManager, InMemoryAlertStore, RedisClient
+from ..suricata import SuricataManager
+from .pipeline_status import (
+    ComposantStatusProvider,
+    PipelineStatusAggregator,
+    PipelineStatusService,
+    StaticStatusProvider,
+)
 
 T = TypeVar("T")
-
 logger = logging.getLogger(__name__)
 
 
 class ConteneurDI:
-    """
-    Conteneur d'injection de dépendances.
-    
-    Enregistre et résout les services du système selon les principes SOLID.
-    Exemple d'utilisation :
-    
-        container = ConteneurDI()
-        container.enregistrer_services(config)
-        
-        # Résoudre un service
-        suricata_mgr = container.resoudre(AlerteSource)
-        resource_ctrl = container.resoudre(ResourceController)
-    """
-    
-    def __init__(self):
-        """Initialise le conteneur."""
+    """Conteneur d'injection de dependances."""
+
+    def __init__(self) -> None:
         self._container = punq.Container()
         self._instances: Dict[Type, Any] = {}
         self._logger = logging.getLogger(__name__)
-    
-    def enregistrer_singleton(
-        self,
-        interface: Type[T],
-        instance: T,
-    ) -> None:
-        """
-        Enregistre une instance singleton.
-        
-        Args:
-            interface: Le type/interface du service
-            instance: L'instance à enregistrer
-        """
+
+    def enregistrer_singleton(self, interface: Type[T], instance: T) -> None:
         self._container.register(interface, instance=instance)
         self._instances[interface] = instance
-        self._logger.debug(f"Singleton enregistré: {interface.__name__}")
-    
-    def enregistrer_factory(
-        self,
-        interface: Type[T],
-        factory: Callable[..., T],
-    ) -> None:
-        """
-        Enregistre une factory pour créer des instances.
-        
-        Args:
-            interface: Le type/interface du service
-            factory: Une fonction qui crée l'instance
-        """
+        self._logger.debug("Singleton enregistre: %s", interface.__name__)
+
+    def enregistrer_factory(self, interface: Type[T], factory: Callable[..., T]) -> None:
         self._container.register(interface, factory=factory)
-        self._logger.debug(f"Factory enregistrée: {interface.__name__}")
-    
-    def enregistrer_classe(
-        self,
-        interface: Type[T],
-        impl: Type[T],
-    ) -> None:
-        """
-        Enregistre une classe d'implémentation pour une interface.
-        
-        Args:
-            interface: L'interface (Protocol)
-            impl: L'implémentation concrète
-        """
-        self._container.register(interface, factory=impl)
-        self._logger.debug(
-            f"Classe enregistrée: {interface.__name__} -> {impl.__name__}"
-        )
-    
-    def enregistrer_services(self, config_dict: Dict[str, Any]) -> None:
-        """
-        Enregistre tous les services du système.
-        
-        À appeler une seule fois au démarrage de l'application.
-        
-        Args:
-            config_dict: Dictionnaire de configuration
-        """
+        self._logger.debug("Factory enregistree: %s", interface.__name__)
+
+    def enregistrer_services(self, config_source: Union[Dict[str, Any], str, _Path]) -> None:
         self._logger.info("Enregistrement des services...")
-        
-        # 1. Enregistrer ConfigurationIDS
-        config = ConfigurationIDS(**{
-            k: v for k, v in config_dict.items()
-            if k in ConfigurationIDS.__dataclass_fields__
-        })
+
+        if isinstance(config_source, (str, _Path)):
+            config_mgr = ConfigManager(str(config_source))
+            config_dict = config_mgr.get_all()
+        elif isinstance(config_source, dict):
+            config_dict = config_source
+            config_mgr = ConfigManager(config_dict)
+        else:
+            raise TypeError("config_source doit etre un dict ou un chemin")
+
+        config = ConfigurationIDS(
+            **{
+                key: value
+                for key, value in config_dict.items()
+                if key in ConfigurationIDS.__dataclass_fields__
+            }
+        )
         self.enregistrer_singleton(ConfigurationIDS, config)
-        
-        # 2. Enregistrer ConfigManager
-        config_mgr = ConfigManager(config_dict)
         self.enregistrer_singleton(GestionnaireConfig, config_mgr)
-        
-        # 3. Enregistrer AlerteSource (implémentation: SuricataManager)
-        # À adapter selon votre implémentation réelle
-        # self.enregistrer_factory(AlerteSource, lambda: SuricataManager(...))
-        
-        # 4. Enregistrer les composants
-        # À compléter selon vos composants réels
-        # self.enregistrer_classe(ResourceController, ResourceController)
-        # self.enregistrer_classe(DockerManager, DockerManager)
-        
-        self._logger.info("Services enregistrés avec succès")
-    
+
+        suricata_mgr = SuricataManager(config_mgr)
+        docker_mgr = DockerManager(config_mgr)
+        vector_mgr = VectorManager(config_mgr)
+        metrics_collector = MetricsCollector(config_mgr)
+        resource_ctrl = ResourceController(config_mgr)
+        connectivity = ConnectivityChecker(config_mgr)
+
+        self.enregistrer_singleton(ResourceController, resource_ctrl)
+        self.enregistrer_singleton(DockerManager, docker_mgr)
+        self.enregistrer_singleton(VectorManager, vector_mgr)
+        self.enregistrer_singleton(MetricsCollector, metrics_collector)
+        self.enregistrer_singleton(ConnectivityChecker, connectivity)
+        self.enregistrer_singleton(SuricataManager, suricata_mgr)
+        self.enregistrer_singleton(AlerteSource, suricata_mgr)
+        self.enregistrer_singleton(MetriquesProvider, metrics_collector)
+
+        self.enregistrer_singleton(AWSOpenSearchManager, AWSOpenSearchManager(config_mgr))
+        self.enregistrer_singleton(RedisClient, RedisClient(config_mgr))
+        self.enregistrer_singleton(PersistanceAlertes, InMemoryAlertStore())
+
+        providers = [
+            StaticStatusProvider("ids2-network"),
+            ComposantStatusProvider("ids2-agent", resource_ctrl),
+            ComposantStatusProvider("suricata", suricata_mgr),
+            ComposantStatusProvider("vector", vector_mgr),
+            StaticStatusProvider("redis"),
+            StaticStatusProvider("prometheus"),
+            StaticStatusProvider("grafana"),
+            StaticStatusProvider("fastapi"),
+            StaticStatusProvider("cadvisor"),
+            StaticStatusProvider("node_exporter"),
+            StaticStatusProvider("opensearch"),
+        ]
+        pipeline_status = PipelineStatusAggregator(providers)
+        pipeline_service = PipelineStatusService(pipeline_status)
+        self.enregistrer_singleton(PipelineStatusAggregator, pipeline_status)
+        self.enregistrer_singleton(PipelineStatusService, pipeline_service)
+
+        self._logger.info("Services enregistres avec succes")
+
     def resoudre(self, service_type: Type[T]) -> T:
-        """
-        Résout et instancie un service.
-        
-        Args:
-            service_type: Le type du service à résoudre
-            
-        Returns:
-            L'instance du service
-            
-        Raises:
-            punq.MissingDependencyError: Si le service n'est pas enregistré
-        """
-        # Retourner le singleton si déjà créé
         if service_type in self._instances:
             return self._instances[service_type]
-        
-        # Sinon, le conteneur le crée
         instance = self._container.resolve(service_type)
-        self._logger.debug(f"Service résolu: {service_type.__name__}")
+        self._logger.debug("Service resolu: %s", service_type.__name__)
         return instance
-    
+
     @lru_cache(maxsize=128)
     def resoudre_en_cache(self, service_type: Type[T]) -> T:
-        """Résout un service avec cache LRU."""
         return self.resoudre(service_type)
-    
-    def enregistrer_plusieurs(
-        self,
-        mapping: Dict[Type, Type],
-    ) -> None:
-        """
-        Enregistre plusieurs mappages interface->implémentation.
-        
-        Args:
-            mapping: Dict {Interface: Implémentation}
-        """
-        for interface, impl in mapping.items():
-            self.enregistrer_classe(interface, impl)
-    
-    def enregistrer_factories(
-        self,
-        factories: Dict[Type, Callable],
-    ) -> None:
-        """
-        Enregistre plusieurs factories.
-        
-        Args:
-            factories: Dict {Interface: factory_function}
-        """
-        for interface, factory in factories.items():
-            self.enregistrer_factory(interface, factory)
 
 
 class ConteneurFactory:
-    """Factory pour créer et configurer un conteneur DI."""
-    
+    """Factory pour creer et configurer un conteneur DI."""
+
     @staticmethod
-    def creer_conteneur_test() -> ConteneurDI:
-        """Crée un conteneur pour les tests."""
-        container = ConteneurDI()
-        # Enregistrer des mocks/fakes pour les tests
-        # À adapter selon vos tests
-        return container
-    
+    def creer_conteneur_test() -> 'ConteneurDI':
+        return ConteneurDI()
+
     @staticmethod
-    def creer_conteneur_prod(config_path: str) -> ConteneurDI:
-        """
-        Crée un conteneur pour la production.
-        
-        Args:
-            config_path: Chemin vers le fichier de configuration
-        """
-        config_mgr = ConfigManager(config_path)
-        config_dict = config_mgr.get_all()
-        
+    def creer_conteneur_prod(config_path: str) -> 'ConteneurDI':
         container = ConteneurDI()
-        container.enregistrer_services(config_dict)
+        container.enregistrer_services(config_path)
         return container
 
 
-__all__ = [
-    "ConteneurDI",
-    "ConteneurFactory",
-]
+__all__ = ["ConteneurDI", "ConteneurFactory"]
