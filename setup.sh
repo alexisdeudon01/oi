@@ -71,18 +71,20 @@ run_remote() {
 run_remote_sudo() {
   local cmd="$1"
   # Create a temporary script on the remote host to avoid exposing sudo password in process arguments
-  local remote_script="/tmp/sudo-helper-$$.sh"
+  # Use random string to avoid collisions and ensure uniqueness across concurrent runs
+  local remote_script="/tmp/sudo-helper-$(date +%s%N)-$RANDOM.sh"
   
-  # Upload the command to execute via stdin to avoid it appearing in ps output
+  # Upload the command to execute via stdin and ensure cleanup in all cases
+  # Using a trap-like pattern to guarantee removal even on failure
   if [ "$USE_SSH_KEY" = true ]; then
     ssh -i "$SSH_KEY_PATH" -o StrictHostKeyChecking=accept-new "${PI_USER}@${PI_HOST}" \
-      "cat > '$remote_script' && chmod +x '$remote_script' && echo '$SUDO_PASS' | sudo -S -p '' '$remote_script' && rm -f '$remote_script'" <<EOF
+      "cat > '$remote_script' && chmod +x '$remote_script' && (echo '$SUDO_PASS' | sudo -S -p '' '$remote_script'; EXIT_CODE=\$?; rm -f '$remote_script'; exit \$EXIT_CODE)" <<EOF
 #!/bin/bash
 $cmd
 EOF
   else
     sshpass -p "$PI_PASS" ssh -o StrictHostKeyChecking=accept-new "${PI_USER}@${PI_HOST}" \
-      "cat > '$remote_script' && chmod +x '$remote_script' && echo '$SUDO_PASS' | sudo -S -p '' '$remote_script' && rm -f '$remote_script'" <<EOF
+      "cat > '$remote_script' && chmod +x '$remote_script' && (echo '$SUDO_PASS' | sudo -S -p '' '$remote_script'; EXIT_CODE=\$?; rm -f '$remote_script'; exit \$EXIT_CODE)" <<EOF
 #!/bin/bash
 $cmd
 EOF
