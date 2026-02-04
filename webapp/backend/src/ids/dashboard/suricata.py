@@ -88,6 +88,7 @@ class SuricataLogMonitor:
             try:
                 await self._task
             except asyncio.CancelledError:
+                # Task cancellation is expected during shutdown
                 pass
         logger.info("Stopped Suricata log monitoring")
 

@@ -36,6 +36,7 @@ from .setup import OpenSearchSetup, TailnetSetup, setup_infrastructure
 from .suricata import SuricataLogMonitor
 from .tailscale import TailscaleMonitor
 from ids.storage import crud, get_session, init_db, models, schemas
+from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 logger = logging.getLogger(__name__)
@@ -55,6 +56,21 @@ async def lifespan(app: FastAPI):
     # Startup
     logger.info("Starting IDS Dashboard...")
 
+    # Initialize database
+    init_db()
+    seed_db = next(get_session())
+    for model in (
+        models.Secrets,
+        models.AwsConfig,
+        models.RaspberryPiConfig,
+        models.SuricataConfig,
+        models.VectorConfig,
+        models.TailscaleConfig,
+        models.FastapiConfig,
+    ):
+        crud.get_or_create_singleton(seed_db, model)
+    seed_db.close()
+
     # Initialize components
     dashboard_state["startup_issues"] = []
     dashboard_state["ai_healing"] = AIHealingService(api_key=os.getenv("ANTHROPIC_API_KEY"))
@@ -72,8 +88,13 @@ async def lifespan(app: FastAPI):
             )
         dashboard_state["startup_issues"].append(response)
 
+    db = next(get_session())
+    suricata_cfg = crud.get_or_create_singleton(db, models.SuricataConfig)
+    pi_cfg = crud.get_or_create_singleton(db, models.RaspberryPiConfig)
+    db.close()
+
     try:
-        dashboard_state["suricata"] = SuricataLogMonitor()
+        dashboard_state["suricata"] = SuricataLogMonitor(log_path=Path(suricata_cfg.log_path))
         await dashboard_state["suricata"].start()
     except Exception as exc:
         logger.error(f"Failed to start Suricata monitor: {exc}")
@@ -91,7 +112,8 @@ async def lifespan(app: FastAPI):
         await record_startup_issue("elasticsearch", exc)
 
     try:
-        dashboard_state["network"] = NetworkMonitor(interface=os.getenv("MIRROR_INTERFACE", "eth0"))
+        mirror_interface = pi_cfg.network_interface or os.getenv("MIRROR_INTERFACE", "eth0")
+        dashboard_state["network"] = NetworkMonitor(interface=mirror_interface)
         promisc_enabled = await dashboard_state["network"].ensure_promiscuous_mode()
         if not promisc_enabled:
             await record_startup_issue(
@@ -108,6 +130,7 @@ async def lifespan(app: FastAPI):
         logger.error(f"Failed to initialize hardware controller: {exc}")
         await record_startup_issue("hardware", exc)
 
+    tailnet = os.getenv("TAILSCALE_TAILNET")
     tailscale_api_key = os.getenv("TAILSCALE_API_KEY")
     if tailnet and tailscale_api_key:
         try:
@@ -261,6 +284,7 @@ def create_dashboard_app() -> FastAPI:
                 temp_raw = temp_file.read_text().strip()
                 temperature = float(temp_raw) / 1000.0  # Convert from millidegrees
         except Exception:
+            # Temperature reading is optional; silently ignore if thermal zone unavailable
             pass
 
         boot_time = psutil.boot_time()
@@ -281,12 +305,25 @@ def create_dashboard_app() -> FastAPI:
             timestamp=datetime.now(),
         )
 
+    @app.get("/api/db/health")
+    async def get_db_health() -> dict[str, str]:
+        """Check database connectivity."""
+        session = None
+        try:
+            session = next(get_session())
+            session.execute(text("SELECT 1"))
+            return {"status": "ok"}
+        except Exception as exc:  # pragma: no cover - health check
+            return {"status": "error", "detail": str(exc)}
+        finally:
+            if session is not None:
+                session.close()
+
     @app.get("/api/pipeline/status")
     async def get_pipeline_status() -> PipelineStatus:
         """Get pipeline component status."""
 
         # Check Suricata
-        suricata_status = "unknown"
         try:
             result = await asyncio.to_thread(
                 lambda: __import__("subprocess").run(
@@ -300,7 +337,6 @@ def create_dashboard_app() -> FastAPI:
             suricata_status = "error"
 
         # Check Vector
-        vector_status = "unknown"
         try:
             result = await asyncio.to_thread(
                 lambda: __import__("subprocess").run(
@@ -521,16 +557,7 @@ def create_dashboard_app() -> FastAPI:
     @app.get("/api/setup/tailnet/verify")
     async def verify_tailnet(db: Session = Depends(get_session)) -> dict:
         """Verify Tailscale tailnet configuration."""
-        api_key = os.getenv("TAILSCALE_API_KEY")
-        tailnet = os.getenv("TAILSCALE_TAILNET")  # Optionnel
-
-        if not api_key:
-            return {
-                "configured": False,
-                "error": "TAILSCALE_API_KEY not set",
-            }
-
-        setup = TailnetSetup(tailnet, api_key)
+        setup = TailnetSetup(session=db)
         return await setup.verify_tailnet()
 
     @app.post("/api/setup/tailnet/create-key")
@@ -541,16 +568,7 @@ def create_dashboard_app() -> FastAPI:
         db: Session = Depends(get_session),
     ) -> dict:
         """Create a Tailscale auth key."""
-        api_key = os.getenv("TAILSCALE_API_KEY")
-        tailnet = os.getenv("TAILSCALE_TAILNET")  # Optionnel
-
-        if not api_key:
-            return {
-                "success": False,
-                "error": "TAILSCALE_API_KEY not set",
-            }
-
-        setup = TailnetSetup(tailnet, api_key)
+        setup = TailnetSetup(session=db)
         return await setup.create_auth_key(reusable=reusable, ephemeral=ephemeral, tags=tags)
 
     @app.get("/api/setup/opensearch/verify")
@@ -649,7 +667,7 @@ def create_dashboard_app() -> FastAPI:
         return {"deployment_id": deployment.id, "steps": steps, "status": deployment.status}
 
     # Serve static frontend (if available)
-    frontend_path = Path(__file__).parent.parent.parent.parent / "frontend" / "dist"
+    frontend_path = Path(__file__).resolve().parents[4] / "frontend" / "dist"
     if frontend_path.exists():
         app.mount("/static", StaticFiles(directory=str(frontend_path)), name="static")
 
