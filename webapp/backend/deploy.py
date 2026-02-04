@@ -5,7 +5,6 @@ import getpass
 import json
 import os
 import posixpath
-import sys
 from pathlib import Path
 
 import paramiko
