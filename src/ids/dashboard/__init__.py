@@ -10,6 +10,7 @@ from .elasticsearch import ElasticsearchMonitor
 from .hardware import HardwareController
 from .network import NetworkMonitor
 from .ai_healing import AIHealingService
+from .setup import OpenSearchSetup, TailnetSetup, setup_infrastructure
 from .tailscale import TailscaleMonitor
 
 __all__ = [
@@ -20,4 +21,7 @@ __all__ = [
     "NetworkMonitor",
     "AIHealingService",
     "TailscaleMonitor",
+    "TailnetSetup",
+    "OpenSearchSetup",
+    "setup_infrastructure",
 ]

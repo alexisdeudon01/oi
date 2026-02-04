@@ -30,6 +30,7 @@ from .models import (
     TailscaleNode,
 )
 from .network import NetworkMonitor
+from .setup import OpenSearchSetup, TailnetSetup, setup_infrastructure
 from .suricata import SuricataLogMonitor
 from .tailscale import TailscaleMonitor
 
@@ -276,6 +277,89 @@ def create_dashboard_app() -> FastAPI:
         )
 
         return response.model_dump(mode="json")
+
+    # ============================================================================
+    # Setup & Configuration Endpoints
+    # ============================================================================
+
+    @app.get("/api/setup/tailnet/verify")
+    async def verify_tailnet() -> dict:
+        """Verify Tailscale tailnet configuration."""
+        tailnet = os.getenv("TAILSCALE_TAILNET")
+        api_key = os.getenv("TAILSCALE_API_KEY")
+
+        if not tailnet or not api_key:
+            return {
+                "configured": False,
+                "error": "TAILSCALE_TAILNET or TAILSCALE_API_KEY not set",
+            }
+
+        setup = TailnetSetup(tailnet, api_key)
+        return await setup.verify_tailnet()
+
+    @app.post("/api/setup/tailnet/create-key")
+    async def create_tailnet_key(
+        reusable: bool = True,
+        ephemeral: bool = False,
+        tags: list[str] | None = None,
+    ) -> dict:
+        """Create a Tailscale auth key."""
+        tailnet = os.getenv("TAILSCALE_TAILNET")
+        api_key = os.getenv("TAILSCALE_API_KEY")
+
+        if not tailnet or not api_key:
+            return {
+                "success": False,
+                "error": "TAILSCALE_TAILNET or TAILSCALE_API_KEY not set",
+            }
+
+        setup = TailnetSetup(tailnet, api_key)
+        return await setup.create_auth_key(reusable=reusable, ephemeral=ephemeral, tags=tags)
+
+    @app.get("/api/setup/opensearch/verify")
+    async def verify_opensearch(domain_name: str | None = None) -> dict:
+        """Verify OpenSearch domain configuration."""
+        config_path = Path("config.yaml")
+        setup = OpenSearchSetup(config_path)
+        return await setup.verify_domain(domain_name)
+
+    @app.post("/api/setup/opensearch/create")
+    async def create_opensearch_domain(
+        domain_name: str | None = None,
+        wait: bool = True,
+        timeout: int = 1800,
+    ) -> dict:
+        """Create OpenSearch domain."""
+        config_path = Path("config.yaml")
+        setup = OpenSearchSetup(config_path)
+        return await setup.create_domain(domain_name=domain_name, wait=wait, timeout=timeout)
+
+    @app.post("/api/setup/infrastructure")
+    async def setup_complete_infrastructure(
+        tailnet: str | None = None,
+        tailscale_api_key: str | None = None,
+        opensearch_domain: str | None = None,
+    ) -> dict:
+        """
+        Setup complete infrastructure (Tailnet + OpenSearch).
+
+        This endpoint will:
+        - Verify or configure Tailscale tailnet
+        - Create or verify OpenSearch domain
+        """
+        # Use env vars if not provided
+        tailnet = tailnet or os.getenv("TAILSCALE_TAILNET")
+        tailscale_api_key = tailscale_api_key or os.getenv("TAILSCALE_API_KEY")
+        opensearch_domain = opensearch_domain or os.getenv("OPENSEARCH_DOMAIN_NAME")
+
+        config_path = Path("config.yaml")
+
+        return await setup_infrastructure(
+            tailnet=tailnet,
+            tailscale_api_key=tailscale_api_key,
+            opensearch_domain=opensearch_domain,
+            config_path=config_path,
+        )
 
     # Serve static frontend (if available)
     frontend_path = Path(__file__).parent.parent.parent.parent / "frontend" / "dist"
