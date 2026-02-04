@@ -1,5 +1,7 @@
 .venv/
 scripts/actions_secrets.map
+secret.json
+data/
 
 # Python cache
 __pycache__/
@@ -17,6 +19,8 @@ tests/pytest.log
 *.egg-info/
 dist/
 build/
+frontend/node_modules/
+webapp/frontend/node_modules/
 
 # IDE
 .idea/

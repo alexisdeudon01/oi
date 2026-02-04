@@ -4,7 +4,7 @@
 
 ```bash
 # Activer l'environnement virtuel
-source .venv/bin/activate
+source webapp/backend/.venv/bin/activate
 
 # Lancer le dashboard
 python -m ids.dashboard.main
@@ -13,7 +13,7 @@ python -m ids.dashboard.main
 Ou avec uvicorn directement :
 
 ```bash
-source .venv/bin/activate
+source webapp/backend/.venv/bin/activate
 uvicorn ids.dashboard.app:app --host 0.0.0.0 --port 8080 --reload
 ```
 
@@ -21,7 +21,7 @@ uvicorn ids.dashboard.app:app --host 0.0.0.0 --port 8080 --reload
 
 ```bash
 # 1. Exécuter le script de setup
-./scripts/dashboard_setup.sh
+./webapp/backend/scripts/dashboard_setup.sh
 
 # 2. Configurer les variables d'environnement
 nano .env
@@ -39,10 +39,10 @@ sudo journalctl -u ids-dashboard -f
 
 ```bash
 # Activer l'environnement virtuel
-source .venv/bin/activate
+source webapp/backend/.venv/bin/activate
 
 # Installer les dépendances si nécessaire
-pip install -r requirements.txt
+pip install -r webapp/backend/requirements.txt
 
 # Lancer
 python -m ids.dashboard.main
@@ -54,8 +54,8 @@ Avant de lancer le dashboard, configurez l'infrastructure :
 
 ```bash
 # Configuration interactive
-source .venv/bin/activate
-python scripts/configure_infrastructure.py
+source webapp/backend/.venv/bin/activate
+python webapp/backend/scripts/configure_infrastructure.py
 ```
 
 Ou via les endpoints API du dashboard :

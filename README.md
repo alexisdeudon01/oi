@@ -18,7 +18,7 @@ git clone https://github.com/alexisdeudon01/oi.git
 cd oi
 
 # Installe les dépendances
-pip install -r requirements.txt
+pip install -r webapp/backend/requirements.txt
 
 # Configure l'environnement
 cp config.yaml.example config.yaml
@@ -164,7 +164,7 @@ oi/
 │   └── integration/
 ├── .github/workflows/
 │   └── ci-cd.yml
-├── requirements.txt
+├── webapp/backend/requirements.txt
 └── config.yaml
 ```
 
