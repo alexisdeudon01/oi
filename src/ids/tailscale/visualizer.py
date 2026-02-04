@@ -7,13 +7,17 @@ Single Responsibility: Only handles graph visualization.
 from __future__ import annotations
 
 import json
+from pathlib import Path
+from typing import TYPE_CHECKING
 
 from .interfaces import BaseVisualizer
-from .models import NetworkSnapshot
+
+if TYPE_CHECKING:
+    from .models import DeviceState, NetworkSnapshot
 
 # Optional dependency
 try:
-    from pyvis.network import Network  # type: ignore[import-not-found]
+    from pyvis.network import Network
 
     PYVIS_AVAILABLE = True
 except ImportError:
@@ -154,10 +158,10 @@ class PyvisVisualizer(BaseVisualizer):
     def _add_device_nodes(self, net: Network, snapshot: NetworkSnapshot) -> None:
         """Add all device nodes with appropriate styling."""
         # Calculate latency range for size scaling
-        latencies = [d.latency_ms for d in snapshot.devices if d.is_reachable]
-        min_lat = min(latencies) if latencies else 0
-        max_lat = max(latencies) if latencies else 100
-        lat_range = max_lat - min_lat if max_lat > min_lat else 1
+        latencies = [d.latency_ms for d in snapshot.devices if d.is_reachable and d.latency_ms is not None]
+        min_lat = min(latencies) if latencies else 0.0
+        max_lat = max(latencies) if latencies else 100.0
+        lat_range = max_lat - min_lat if max_lat > min_lat else 1.0
 
         for device in snapshot.devices:
             color, border = self._get_device_colors(device)
@@ -179,7 +183,7 @@ class PyvisVisualizer(BaseVisualizer):
             edge_width = 1 if not device.is_online else 2
             net.add_edge("TAILNET_CORE", device.hostname, color=edge_color, width=edge_width)
 
-    def _get_device_colors(self, device) -> tuple:
+    def _get_device_colors(self, device: DeviceState) -> tuple[str, str]:
         """Determine node colors based on device state."""
         if not device.is_online:
             return "#f85149", "#da3633"  # Red - offline
@@ -191,16 +195,18 @@ class PyvisVisualizer(BaseVisualizer):
             return "#a371f7", "#8957e5"  # Purple - good
         return "#f0883e", "#d47616"  # Orange - slow
 
-    def _calculate_node_size(self, device, min_lat: float, lat_range: float) -> float:
+    def _calculate_node_size(self, device: DeviceState, min_lat: float, lat_range: float) -> float:
         """Calculate node size based on latency (lower = larger)."""
         if not device.is_reachable:
             return self.min_node_size
 
         # Inverse scale: lower latency = larger node
+        if device.latency_ms is None:
+            return self.min_node_size
         normalized = 1 - ((device.latency_ms - min_lat) / lat_range) if lat_range > 0 else 0.5
         return self.min_node_size + (self.max_node_size - self.min_node_size) * normalized
 
-    def _build_device_tooltip(self, device) -> str:
+    def _build_device_tooltip(self, device: DeviceState) -> str:
         """Build HTML tooltip for a device."""
         latency_str = f"{device.latency_ms:.1f}ms" if device.is_reachable else "N/A"
         tags_str = ", ".join(device.tags) if device.tags else "none"
@@ -246,13 +252,10 @@ class PyvisVisualizer(BaseVisualizer):
         </script>
         """
 
-        with open(html_file, "r", encoding="utf-8") as f:
-            content = f.read()
-
+        html_path = Path(html_file)
+        content = html_path.read_text(encoding="utf-8")
         content = content.replace("</body>", f"{js_code}\n</body>")
-
-        with open(html_file, "w", encoding="utf-8") as f:
-            f.write(content)
+        html_path.write_text(content, encoding="utf-8")
 
     def _inject_legend(self, html_file: str, snapshot: NetworkSnapshot) -> None:
         """Inject a legend into the HTML."""
@@ -275,10 +278,7 @@ class PyvisVisualizer(BaseVisualizer):
         </div>
         """
 
-        with open(html_file, "r", encoding="utf-8") as f:
-            content = f.read()
-
+        html_path = Path(html_file)
+        content = html_path.read_text(encoding="utf-8")
         content = content.replace("<body>", f"<body>{legend}")
-
-        with open(html_file, "w", encoding="utf-8") as f:
-            f.write(content)
+        html_path.write_text(content, encoding="utf-8")

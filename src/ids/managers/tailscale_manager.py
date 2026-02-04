@@ -11,7 +11,7 @@ import logging
 import subprocess
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -31,13 +31,13 @@ class TailscaleDevice:
     device_id: str
     name: str
     hostname: str
-    addresses: List[str]
+    addresses: list[str]
     os: str
     online: bool
     authorized: bool
-    tags: List[str] = field(default_factory=list)
-    last_seen: Optional[str] = None
-    user: Optional[str] = None
+    tags: list[str] = field(default_factory=list)
+    last_seen: str | None = None
+    user: str | None = None
 
 
 @dataclass
@@ -48,12 +48,12 @@ class TailscaleKey:
     key: str
     description: str
     created: str
-    expires: Optional[str] = None
+    expires: str | None = None
     revoked: bool = False
     reusable: bool = False
     ephemeral: bool = False
     preauthorized: bool = False
-    tags: List[str] = field(default_factory=list)
+    tags: list[str] = field(default_factory=list)
 
 
 class TailscaleManager:
@@ -81,7 +81,7 @@ class TailscaleManager:
 
         self.api_key = api_key
         self.tailnet = tailnet
-        self._client: Optional[Tailscale] = None
+        self._client: Tailscale | None = None
 
     async def __aenter__(self):
         """Context manager async entry."""
@@ -98,7 +98,7 @@ class TailscaleManager:
     # Device Management
     # =========================================================================
 
-    async def list_devices(self) -> List[TailscaleDevice]:
+    async def list_devices(self) -> list[TailscaleDevice]:
         """
         Liste tous les devices du tailnet.
 
@@ -129,7 +129,7 @@ class TailscaleManager:
 
         return devices
 
-    async def get_device(self, device_id: str) -> Optional[TailscaleDevice]:
+    async def get_device(self, device_id: str) -> TailscaleDevice | None:
         """
         Récupère un device spécifique par son ID.
 
@@ -145,7 +145,7 @@ class TailscaleManager:
                 return device
         return None
 
-    async def find_device_by_ip(self, ip_address: str) -> Optional[TailscaleDevice]:
+    async def find_device_by_ip(self, ip_address: str) -> TailscaleDevice | None:
         """
         Trouve un device par son adresse IP Tailscale.
 
@@ -203,7 +203,7 @@ class TailscaleManager:
             logger.error(f"Failed to authorize device {device_id}: {e}")
             return False
 
-    async def set_device_tags(self, device_id: str, tags: List[str]) -> bool:
+    async def set_device_tags(self, device_id: str, tags: list[str]) -> bool:
         """
         Définit les tags d'un device.
 
@@ -229,7 +229,7 @@ class TailscaleManager:
     # Auth Keys Management
     # =========================================================================
 
-    async def list_keys(self) -> List[TailscaleKey]:
+    async def list_keys(self) -> list[TailscaleKey]:
         """
         Liste toutes les auth keys du tailnet.
 
@@ -272,8 +272,8 @@ class TailscaleManager:
         reusable: bool = True,
         ephemeral: bool = False,
         preauthorized: bool = True,
-        tags: Optional[List[str]] = None,
-        expiry_seconds: Optional[int] = None,
+        tags: list[str] | None = None,
+        expiry_seconds: int | None = None,
     ) -> str:
         """
         Crée une nouvelle auth key.
@@ -339,7 +339,7 @@ class TailscaleManager:
     # Connectivity Testing
     # =========================================================================
 
-    def ping_device(self, ip_address: str, count: int = 4, timeout: int = 10) -> Optional[float]:
+    def ping_device(self, ip_address: str, count: int = 4, timeout: int = 10) -> float | None:
         """
         Ping un device via Tailscale CLI.
 
@@ -403,7 +403,7 @@ class TailscaleManager:
     # Network Status
     # =========================================================================
 
-    async def get_network_status(self) -> Dict[str, Any]:
+    async def get_network_status(self) -> dict[str, Any]:
         """
         Récupère le statut complet du réseau.
 
@@ -416,12 +416,12 @@ class TailscaleManager:
         authorized_devices = [d for d in devices if d.authorized]
 
         # Compter par OS
-        os_count: Dict[str, int] = {}
+        os_count: dict[str, int] = {}
         for device in devices:
             os_count[device.os] = os_count.get(device.os, 0) + 1
 
         # Compter par tags
-        tag_count: Dict[str, int] = {}
+        tag_count: dict[str, int] = {}
         for device in devices:
             for tag in device.tags:
                 tag_count[tag] = tag_count.get(tag, 0) + 1
@@ -512,9 +512,9 @@ async def ensure_device_online(
 
 
 __all__ = [
-    "TailscaleManager",
     "TailscaleDevice",
     "TailscaleKey",
+    "TailscaleManager",
     "connect_to_tailnet",
     "ensure_device_online",
 ]

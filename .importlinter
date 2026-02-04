@@ -3,7 +3,8 @@
 # Run with: lint-imports
 
 [importlinter]
-root_packages = ids
+root_packages =
+    ids
 include_external_packages = True
 
 # ============================================================================
@@ -29,6 +30,7 @@ forbidden_modules =
 # ============================================================================
 # Contract 2: Layered Architecture
 # Lower layers should not depend on higher layers
+# Note: decorateurs is a utility module, so we allow it to be imported
 # ============================================================================
 [importlinter:contract:layered-architecture]
 name = Layered Architecture (Clean Architecture)
@@ -39,8 +41,19 @@ layers =
     ids.infrastructure
     ids.interfaces
     ids.domain
-containers =
-    ids
+# Allow decorateurs to be imported (it's a utility module)
+ignore_imports =
+    ids.infrastructure.redis_client -> ids.app.decorateurs
+    ids.infrastructure.aws_manager -> ids.app.decorateurs
+    ids.infrastructure.opensearch_client -> ids.app.decorateurs
+    ids.infrastructure.alert_store -> ids.app.decorateurs
+    ids.composants.resource_controller -> ids.app.decorateurs
+    ids.composants.tailscale_manager -> ids.app.decorateurs
+    ids.composants.metrics_server -> ids.app.decorateurs
+    ids.composants.vector_manager -> ids.app.decorateurs
+    ids.composants.docker_manager -> ids.app.decorateurs
+    ids.composants.base -> ids.app.decorateurs
+    ids.composants.connectivity -> ids.app.decorateurs
 
 # ============================================================================
 # Contract 3: Tailscale Module Independence

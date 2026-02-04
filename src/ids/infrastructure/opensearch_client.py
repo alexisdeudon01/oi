@@ -5,14 +5,16 @@ OpenSearch client helper.
 from __future__ import annotations
 
 import logging
-from typing import Optional
+from typing import TYPE_CHECKING
 from urllib.parse import urlparse
 
 import boto3
 from opensearchpy import AWSV4SignerAuth, OpenSearch, RequestsHttpConnection
 
 from ..app.decorateurs import log_appel, metriques, retry
-from ..interfaces import GestionnaireConfig
+
+if TYPE_CHECKING:
+    from ..interfaces import GestionnaireConfig
 
 logger = logging.getLogger(__name__)
 
@@ -22,17 +24,17 @@ class OpenSearchClient:
 
     def __init__(self, config: GestionnaireConfig) -> None:
         self._config = config
-        self._client: Optional[OpenSearch] = None
+        self._client: OpenSearch | None = None
 
-    def _resolve_endpoint(self) -> Optional[str]:
+    def _resolve_endpoint(self) -> str | None:
         return self._config.obtenir("aws.opensearch_endpoint") or self._config.obtenir(
             "aws.opensearch.endpoint"
         )
 
-    def _resolve_region(self) -> Optional[str]:
+    def _resolve_region(self) -> str | None:
         return self._config.obtenir("aws.region")
 
-    def _build_session(self, region: Optional[str]) -> boto3.Session:
+    def _build_session(self, region: str | None) -> boto3.Session:
         use_instance_profile = bool(self._config.obtenir("aws.credentials.use_instance_profile"))
         access_key = self._config.obtenir("aws.access_key_id")
         secret_key = self._config.obtenir("aws.secret_access_key")
@@ -54,7 +56,7 @@ class OpenSearchClient:
             return bool(configured)
         return "amazonaws.com" in host
 
-    def _resolve_auth(self, host: str) -> Optional[object]:
+    def _resolve_auth(self, host: str) -> object | None:
         username = self._config.obtenir("aws.opensearch.username")
         password = self._config.obtenir("aws.opensearch.password")
         if username and password:
@@ -87,7 +89,7 @@ class OpenSearchClient:
         port = parsed.port or (443 if use_ssl else 80)
         return host, port, use_ssl
 
-    def _build_client(self) -> Optional[OpenSearch]:
+    def _build_client(self) -> OpenSearch | None:
         endpoint = self._resolve_endpoint()
         if not endpoint:
             return None
@@ -114,7 +116,7 @@ class OpenSearchClient:
         return OpenSearch(**client_kwargs)
 
     @property
-    def client(self) -> Optional[OpenSearch]:
+    def client(self) -> OpenSearch | None:
         if self._client is None:
             self._client = self._build_client()
         return self._client

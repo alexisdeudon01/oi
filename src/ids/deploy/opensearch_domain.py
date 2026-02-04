@@ -8,7 +8,7 @@ import logging
 import re
 import time
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any
 
 import boto3
 from botocore.exceptions import ClientError, UnknownServiceError
@@ -65,7 +65,7 @@ def _build_client(session: boto3.Session):
         return session.client("es")
 
 
-def _get_account_id(session: boto3.Session) -> Optional[str]:
+def _get_account_id(session: boto3.Session) -> str | None:
     try:
         sts = session.client("sts")
         return sts.get_caller_identity().get("Account")
@@ -74,7 +74,7 @@ def _get_account_id(session: boto3.Session) -> Optional[str]:
         return None
 
 
-def _merge_domain_defaults(domain_config: Dict[str, Any]) -> Dict[str, Any]:
+def _merge_domain_defaults(domain_config: dict[str, Any]) -> dict[str, Any]:
     merged = dict(domain_config or {})
     merged.setdefault("engine_version", DEFAULT_ENGINE_VERSION)
     merged.setdefault("cluster_config", DEFAULT_CLUSTER_CONFIG)
@@ -85,7 +85,7 @@ def _merge_domain_defaults(domain_config: Dict[str, Any]) -> Dict[str, Any]:
     return merged
 
 
-def _build_access_policy(region: str, account_id: str, domain_name: str) -> Dict[str, Any]:
+def _build_access_policy(region: str, account_id: str, domain_name: str) -> dict[str, Any]:
     return {
         "Version": "2012-10-17",
         "Statement": [
@@ -99,8 +99,8 @@ def _build_access_policy(region: str, account_id: str, domain_name: str) -> Dict
     }
 
 
-def _build_payload(domain_name: str, domain_config: Dict[str, Any]) -> Dict[str, Any]:
-    payload: Dict[str, Any] = {"DomainName": domain_name}
+def _build_payload(domain_name: str, domain_config: dict[str, Any]) -> dict[str, Any]:
+    payload: dict[str, Any] = {"DomainName": domain_name}
     engine_version = domain_config.get("engine_version")
     if engine_version:
         payload["EngineVersion"] = engine_version
@@ -138,7 +138,7 @@ def _build_payload(domain_name: str, domain_config: Dict[str, Any]) -> Dict[str,
     return payload
 
 
-def _describe_domain(client, domain_name: str) -> Optional[Dict[str, Any]]:
+def _describe_domain(client, domain_name: str) -> dict[str, Any] | None:
     try:
         response = client.describe_domain(DomainName=domain_name)
         return response.get("DomainStatus")
@@ -149,7 +149,7 @@ def _describe_domain(client, domain_name: str) -> Optional[Dict[str, Any]]:
         raise
 
 
-def _resolve_endpoint(status: Dict[str, Any]) -> Optional[str]:
+def _resolve_endpoint(status: dict[str, Any]) -> str | None:
     if not status:
         return None
     if status.get("Endpoint"):
@@ -160,7 +160,7 @@ def _resolve_endpoint(status: Dict[str, Any]) -> Optional[str]:
     return None
 
 
-def _wait_for_endpoint(client, domain_name: str, timeout: int, poll: int) -> Optional[str]:
+def _wait_for_endpoint(client, domain_name: str, timeout: int, poll: int) -> str | None:
     deadline = time.monotonic() + timeout
     start = time.monotonic()
     last = start
@@ -222,8 +222,8 @@ def _update_config_endpoint(config_path: Path, endpoint: str) -> None:
 
 def creer_domaine(
     config_path: str,
-    secret_path: Optional[str] = None,
-    domain_name: Optional[str] = None,
+    secret_path: str | None = None,
+    domain_name: str | None = None,
     wait: bool = True,
     timeout: int = 1800,
     poll: int = 30,
@@ -260,7 +260,7 @@ def creer_domaine(
 
     payload = _build_payload(resolved_domain, domain_config)
     existing = _describe_domain(client, resolved_domain)
-    response: Dict[str, Any]
+    response: dict[str, Any]
     if existing:
         logger.info("OpenSearch domain already exists: %s", resolved_domain)
         response = {"DomainStatus": existing}

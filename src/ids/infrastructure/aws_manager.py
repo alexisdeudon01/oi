@@ -6,14 +6,16 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from typing import Any, Dict, Optional
+from typing import TYPE_CHECKING, Any
 
 import boto3
 from botocore.exceptions import UnknownServiceError
 
 from ..app.decorateurs import log_appel, metriques, retry
-from ..interfaces import GestionnaireConfig
 from .opensearch_client import OpenSearchClient
+
+if TYPE_CHECKING:
+    from ..interfaces import GestionnaireConfig
 
 logger = logging.getLogger(__name__)
 
@@ -21,12 +23,12 @@ logger = logging.getLogger(__name__)
 class AWSOpenSearchManager:
     """Gestionnaire AWS pour OpenSearch (connectivite et domaine)."""
 
-    def __init__(self, config: Optional[GestionnaireConfig] = None) -> None:
+    def __init__(self, config: GestionnaireConfig | None = None) -> None:
         self._config = config
-        self._endpoint: Optional[str] = None
-        self._region: Optional[str] = None
-        self._domain_name: Optional[str] = None
-        self._client: Optional[OpenSearchClient] = None
+        self._endpoint: str | None = None
+        self._region: str | None = None
+        self._domain_name: str | None = None
+        self._client: OpenSearchClient | None = None
         if config:
             self._endpoint = config.obtenir("aws.opensearch_endpoint")
             if not self._endpoint:
@@ -58,8 +60,8 @@ class AWSOpenSearchManager:
 
         return boto3.Session(region_name=self._region)
 
-    def _build_domain_payload(self, domain_name: str) -> Dict[str, Any]:
-        payload: Dict[str, Any] = {"DomainName": domain_name}
+    def _build_domain_payload(self, domain_name: str) -> dict[str, Any]:
+        payload: dict[str, Any] = {"DomainName": domain_name}
         if not self._config:
             return payload
 
@@ -107,7 +109,7 @@ class AWSOpenSearchManager:
         except UnknownServiceError:
             return session.client("es")
 
-    def obtenir_client(self) -> Optional[OpenSearchClient]:
+    def obtenir_client(self) -> OpenSearchClient | None:
         return self._client
 
     @log_appel()
@@ -129,7 +131,7 @@ class AWSOpenSearchManager:
     @log_appel()
     @metriques("aws.opensearch.create_domain")
     @retry(nb_tentatives=2, delai_initial=1.0, backoff=2.0)
-    def creer_domaine(self, domain_name: Optional[str] = None) -> Dict[str, Any]:
+    def creer_domaine(self, domain_name: str | None = None) -> dict[str, Any]:
         domaine = domain_name or self._domain_name
         if not domaine:
             raise ValueError("Nom de domaine OpenSearch non configure")

@@ -7,11 +7,15 @@ from __future__ import annotations
 import asyncio
 from dataclasses import asdict
 from datetime import datetime
-from typing import Any, Dict, Iterable, List, Optional
+from typing import TYPE_CHECKING, Any
 
 from ..domain import ConditionSante, MetriquesSystem
-from ..interfaces import GestionnaireComposant, MetriquesProvider, PipelineStatusProvider
 from .decorateurs import log_appel, metriques, retry
+
+if TYPE_CHECKING:
+    from collections.abc import Iterable
+
+    from ..interfaces import GestionnaireComposant, MetriquesProvider, PipelineStatusProvider
 
 
 class StaticStatusProvider:
@@ -22,7 +26,7 @@ class StaticStatusProvider:
         nom: str,
         sain: bool = True,
         message: str = "statut non verifie",
-        details: Optional[Dict[str, Any]] = None,
+        details: dict[str, Any] | None = None,
     ) -> None:
         self.nom = nom
         self._sain = sain
@@ -65,9 +69,9 @@ class ComposantStatusProvider:
 class PipelineStatusAggregator:
     """Aggregate status from all providers."""
 
-    def __init__(self, providers: Optional[Iterable[PipelineStatusProvider]] = None) -> None:
-        self._providers: List[PipelineStatusProvider] = list(providers) if providers else []
-        self._metriques_provider: Optional[MetriquesProvider] = None
+    def __init__(self, providers: Iterable[PipelineStatusProvider] | None = None) -> None:
+        self._providers: list[PipelineStatusProvider] = list(providers) if providers else []
+        self._metriques_provider: MetriquesProvider | None = None
 
     def ajouter_provider(self, provider: PipelineStatusProvider) -> None:
         self._providers.append(provider)
@@ -82,7 +86,7 @@ class PipelineStatusAggregator:
     @log_appel()
     @metriques("pipeline_status.collecte")
     @retry(nb_tentatives=2, delai_initial=0.5)
-    async def collecter(self) -> Dict[str, Any]:
+    async def collecter(self) -> dict[str, Any]:
         timestamp = _utc_iso()
         if not self._providers:
             return {
@@ -98,11 +102,11 @@ class PipelineStatusAggregator:
             return_exceptions=True,
         )
 
-        composants: List[Dict[str, Any]] = []
-        erreurs: List[str] = []
+        composants: list[dict[str, Any]] = []
+        erreurs: list[str] = []
         sains = 0
 
-        for provider, resultat in zip(self._providers, results):
+        for provider, resultat in zip(self._providers, results, strict=False):
             if isinstance(resultat, Exception):
                 erreurs.append(f"{_provider_nom(provider)}: {resultat}")
                 composants.append(_erreur_component(provider, str(resultat)))
@@ -121,7 +125,7 @@ class PipelineStatusAggregator:
         total = len(composants)
         etat = _etat_pipeline(total, sains)
 
-        payload: Dict[str, Any] = {
+        payload: dict[str, Any] = {
             "timestamp": timestamp,
             "etat_pipeline": etat,
             "composants": composants,
@@ -142,7 +146,7 @@ class PipelineStatusService:
 
     @log_appel()
     @metriques("pipeline_status.endpoint")
-    async def obtenir_statut(self) -> Dict[str, Any]:
+    async def obtenir_statut(self) -> dict[str, Any]:
         return await self._aggregator.collecter()
 
 
@@ -167,7 +171,7 @@ def _provider_nom(provider: PipelineStatusProvider) -> str:
     return provider.__class__.__name__
 
 
-def _condition_to_dict(condition: ConditionSante) -> Dict[str, Any]:
+def _condition_to_dict(condition: ConditionSante) -> dict[str, Any]:
     data = asdict(condition)
     data["derniere_verification"] = f"{condition.derniere_verification.isoformat()}Z"
     return data
@@ -176,7 +180,7 @@ def _condition_to_dict(condition: ConditionSante) -> Dict[str, Any]:
 def _erreur_component(
     provider: PipelineStatusProvider,
     message: str,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     return {
         "nom_composant": _provider_nom(provider),
         "sain": False,
@@ -186,7 +190,7 @@ def _erreur_component(
     }
 
 
-def _normaliser_metriques(brut: Any) -> Optional[Dict[str, Any]]:
+def _normaliser_metriques(brut: Any) -> dict[str, Any] | None:
     if brut is None:
         return None
     if isinstance(brut, MetriquesSystem):
@@ -205,8 +209,8 @@ def _normaliser_metriques(brut: Any) -> Optional[Dict[str, Any]]:
 
 
 async def _collecter_metriques(
-    provider: Optional[MetriquesProvider],
-) -> Optional[Dict[str, Any]]:
+    provider: MetriquesProvider | None,
+) -> dict[str, Any] | None:
     if provider is None:
         return None
     try:
@@ -217,8 +221,8 @@ async def _collecter_metriques(
 
 
 __all__ = [
-    "StaticStatusProvider",
     "ComposantStatusProvider",
     "PipelineStatusAggregator",
     "PipelineStatusService",
+    "StaticStatusProvider",
 ]

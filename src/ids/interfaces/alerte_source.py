@@ -4,7 +4,8 @@ Interface AlerteSource - Contrat pour les sources d'alertes.
 Définit le Protocol pour les sources d'alertes IDS (Suricata, fichiers, API, etc.).
 """
 
-from typing import AsyncGenerator, Protocol
+from collections.abc import AsyncGenerator
+from typing import Protocol
 
 from ..domain.alerte import AlerteIDS
 

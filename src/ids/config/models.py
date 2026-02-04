@@ -1,5 +1,5 @@
 from dataclasses import dataclass, field
-from typing import Any, Dict, List
+from typing import Any
 
 
 @dataclass
@@ -29,4 +29,4 @@ class ConfigurationIDS:
     suricata: SuricataConfig = field(default_factory=SuricataConfig)
     docker: DockerConfig = field(default_factory=DockerConfig)
     # Ajoutez d'autres configurations si nécessaire
-    autres_parametres: Dict[str, Any] = field(default_factory=dict)
+    autres_parametres: dict[str, Any] = field(default_factory=dict)

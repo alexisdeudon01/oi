@@ -3,18 +3,20 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Optional
+from typing import TYPE_CHECKING
 
 from ..app.decorateurs import log_appel, metriques
 from ..domain import ConditionSante
-from ..interfaces import GestionnaireConfig
 from .base import BaseComponent
+
+if TYPE_CHECKING:
+    from ..interfaces import GestionnaireConfig
 
 
 class VectorManager(BaseComponent):
     """Composant pour Vector (lecture eve.json -> OpenSearch)."""
 
-    def __init__(self, config: Optional[GestionnaireConfig] = None) -> None:
+    def __init__(self, config: GestionnaireConfig | None = None) -> None:
         super().__init__(config, "vector")
         config_path = "vector/vector.toml"
         if config:

@@ -9,12 +9,14 @@ from __future__ import annotations
 
 import asyncio
 import getpass
-from typing import Optional
+from typing import TYPE_CHECKING
 
 from .api_client import BaseAPIClient, create_api_client
 from .connectivity import BaseConnectivityTester, TailscalePingTester
-from .interfaces import NetworkVisualizer
 from .models import HealthMetrics, NetworkSnapshot
+
+if TYPE_CHECKING:
+    from .interfaces import NetworkVisualizer
 
 
 class TailnetMonitor:
@@ -39,9 +41,9 @@ class TailnetMonitor:
         self,
         tailnet: str,
         api_key: str,
-        api_client: Optional[BaseAPIClient] = None,
-        connectivity_tester: Optional[BaseConnectivityTester] = None,
-        visualizer: Optional[NetworkVisualizer] = None,
+        api_client: BaseAPIClient | None = None,
+        connectivity_tester: BaseConnectivityTester | None = None,
+        visualizer: NetworkVisualizer | None = None,
     ):
         """
         Initialize the monitor with optional dependency injection.

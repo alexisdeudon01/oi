@@ -1,7 +1,6 @@
 import os
 import subprocess
 from pathlib import Path
-from typing import List
 
 from ..app.decorateurs import log_appel, metriques, retry
 from ..domain import ConditionSante
@@ -24,13 +23,13 @@ class DockerManager(BaseComponent):
         )
         return Path(compose_path)
 
-    def _run(self, args: List[str]) -> None:
+    def _run(self, args: list[str]) -> None:
         if os.environ.get("IDS_DRY_RUN") == "1":
             self._logger.info("Dry-run docker: %s", " ".join(args))
             return
         subprocess.run(args, check=True)
 
-    def _compose_command(self, *parts: str) -> List[str]:
+    def _compose_command(self, *parts: str) -> list[str]:
         return ["docker", "compose", "-f", str(self._compose_file), *parts]
 
     @log_appel()

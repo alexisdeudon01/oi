@@ -9,7 +9,6 @@ from __future__ import annotations
 import json
 import re
 import subprocess
-from typing import List, Optional
 
 from .interfaces import BaseConnectivityTester
 
@@ -31,7 +30,7 @@ class TailscalePingTester(BaseConnectivityTester):
         """
         self.timeout = timeout
 
-    def ping(self, ip: str, count: int = 3) -> Optional[float]:
+    def ping(self, ip: str, count: int = 3) -> float | None:
         """
         Ping a device using tailscale ping and return average latency.
 
@@ -102,7 +101,7 @@ class TailscalePingTester(BaseConnectivityTester):
         except (subprocess.TimeoutExpired, FileNotFoundError, OSError, json.JSONDecodeError):
             return False
 
-    def get_self_ip(self) -> Optional[str]:
+    def get_self_ip(self) -> str | None:
         """Get the local Tailscale IP address."""
         try:
             result = subprocess.run(
@@ -129,7 +128,7 @@ class MockConnectivityTester(BaseConnectivityTester):
     def __init__(
         self,
         default_latency: float = 50.0,
-        failure_ips: Optional[List[str]] = None,
+        failure_ips: list[str] | None = None,
     ):
         """
         Initialize mock tester.
@@ -141,7 +140,7 @@ class MockConnectivityTester(BaseConnectivityTester):
         self.default_latency = default_latency
         self.failure_ips = failure_ips or []
 
-    def ping(self, ip: str, count: int = 3) -> Optional[float]:
+    def ping(self, ip: str, count: int = 3) -> float | None:
         """Return mock latency."""
         del count  # Unused in mock
         if ip in self.failure_ips:

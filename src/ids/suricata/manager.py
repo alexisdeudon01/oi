@@ -1,7 +1,7 @@
 import asyncio
 import os
+from collections.abc import AsyncGenerator
 from pathlib import Path
-from typing import AsyncGenerator, Optional
 
 from ..app.decorateurs import log_appel, metriques, retry
 from ..composants.base import BaseComponent
@@ -37,11 +37,11 @@ class SuricataManager(BaseComponent, AlerteSource):
                 if alerte:
                     yield alerte
 
-    async def _ouvrir_fichier(self) -> Optional[object]:
+    async def _ouvrir_fichier(self) -> object | None:
         if not self._log_path.exists():
             self._logger.warning("Fichier eve.json introuvable: %s", self._log_path)
             return None
-        handle = open(self._log_path, "r", encoding="utf-8")
+        handle = open(self._log_path, encoding="utf-8")
         handle.seek(0, os.SEEK_END)
         return handle
 

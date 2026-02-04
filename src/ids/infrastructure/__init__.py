@@ -10,6 +10,6 @@ from .redis_client import RedisClient
 __all__ = [
     "AWSOpenSearchManager",
     "InMemoryAlertStore",
-    "RedisClient",
     "LoggerStandard",
+    "RedisClient",
 ]

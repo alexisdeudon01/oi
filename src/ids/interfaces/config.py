@@ -4,7 +4,7 @@ Interface GestionnaireConfig - Contrat pour la gestion de configuration.
 Définit le Protocol pour les gestionnaires de configuration.
 """
 
-from typing import Any, Dict, Protocol
+from typing import Any, Protocol
 
 
 class GestionnaireConfig(Protocol):
@@ -22,7 +22,7 @@ class GestionnaireConfig(Protocol):
         """Recharge la configuration depuis la source."""
         ...
 
-    def get_all(self) -> Dict[str, Any]:
+    def get_all(self) -> dict[str, Any]:
         """Retourne la configuration complete."""
         ...
 

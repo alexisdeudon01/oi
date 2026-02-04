@@ -1,5 +1,4 @@
 import subprocess
-from typing import Optional
 
 import aiohttp
 
@@ -15,7 +14,7 @@ class ConnectivityTester(BaseComponent):
     def __init__(self, config: GestionnaireConfig) -> None:
         super().__init__(config, "connectivity")
 
-    def _get_opensearch_endpoint(self) -> Optional[str]:
+    def _get_opensearch_endpoint(self) -> str | None:
         endpoint = self._config.obtenir("aws.opensearch_endpoint")
         if endpoint:
             return endpoint
@@ -34,10 +33,9 @@ class ConnectivityTester(BaseComponent):
             )
 
         try:
-            async with aiohttp.ClientSession() as session:
-                async with session.get(endpoint, timeout=5) as response:
-                    sain = response.status < 500
-                    message = f"HTTP {response.status}"
+            async with aiohttp.ClientSession() as session, session.get(endpoint, timeout=5) as response:
+                sain = response.status < 500
+                message = f"HTTP {response.status}"
         except Exception as exc:
             sain = False
             message = f"Erreur: {exc}"
@@ -68,4 +66,4 @@ class ConnectivityTester(BaseComponent):
 
 ConnectivityChecker = ConnectivityTester
 
-__all__ = ["ConnectivityTester", "ConnectivityChecker"]
+__all__ = ["ConnectivityChecker", "ConnectivityTester"]

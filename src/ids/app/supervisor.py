@@ -7,7 +7,6 @@ import logging
 import signal
 import sys
 from pathlib import Path
-from typing import Optional
 
 from ..composants import DockerManager, ResourceController
 from ..config.loader import ConfigManager
@@ -32,9 +31,9 @@ class AgentSupervisor:
         self.container = ConteneurFactory.creer_conteneur_prod(str(self.config_path))
         self._shutdown_event = asyncio.Event()
         self._tasks: list[asyncio.Task] = []
-        self._resource_controller: Optional[ResourceController] = None
-        self._docker_manager: Optional[DockerManager] = None
-        self._suricata_manager: Optional[SuricataManager] = None
+        self._resource_controller: ResourceController | None = None
+        self._docker_manager: DockerManager | None = None
+        self._suricata_manager: SuricataManager | None = None
 
     @log_appel()
     @metriques("agent_start")

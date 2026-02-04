@@ -10,8 +10,8 @@ import functools
 import inspect
 import logging
 import time
-from datetime import datetime
-from typing import Any, Callable, TypeVar, cast
+from collections.abc import Callable
+from typing import TypeVar, cast
 
 T = TypeVar("T")
 
@@ -60,7 +60,7 @@ def log_appel(
                     logger.error(f"Exception dans {func.__name__}: {e}")
                     raise
 
-            return cast(Callable[..., T], async_wrapper)
+            return cast("Callable[..., T]", async_wrapper)
         else:
 
             @functools.wraps(func)
@@ -79,12 +79,12 @@ def log_appel(
                     logger.error(f"Exception dans {func.__name__}: {e}")
                     raise
 
-            return cast(Callable[..., T], sync_wrapper)
+            return cast("Callable[..., T]", sync_wrapper)
 
     return decorator
 
 
-def metriques(nom_metrique: str = None) -> Callable[[Callable[..., T]], Callable[..., T]]:
+def metriques(nom_metrique: str | None = None) -> Callable[[Callable[..., T]], Callable[..., T]]:
     """
     Décorateur pour collecter des métriques (durée d'exécution).
 
@@ -113,7 +113,7 @@ def metriques(nom_metrique: str = None) -> Callable[[Callable[..., T]], Callable
                     duree = time.time() - debut
                     logger.debug(f"{metrique_name}: {duree:.3f}s")
 
-            return cast(Callable[..., T], async_wrapper)
+            return cast("Callable[..., T]", async_wrapper)
         else:
 
             @functools.wraps(func)
@@ -126,7 +126,7 @@ def metriques(nom_metrique: str = None) -> Callable[[Callable[..., T]], Callable
                     duree = time.time() - debut
                     logger.debug(f"{metrique_name}: {duree:.3f}s")
 
-            return cast(Callable[..., T], sync_wrapper)
+            return cast("Callable[..., T]", sync_wrapper)
 
     return decorator
 
@@ -163,7 +163,7 @@ def cache_resultat(
             cache_time[clé] = maintenant
             return resultat
 
-        return cast(Callable[..., T], wrapper)
+        return cast("Callable[..., T]", wrapper)
 
     return decorator
 
@@ -214,7 +214,7 @@ def retry(
                 logger.error(f"{func.__name__} échoué après {nb_tentatives} tentatives")
                 raise dernier_erreur
 
-            return cast(Callable[..., T], async_wrapper)
+            return cast("Callable[..., T]", async_wrapper)
         else:
 
             @functools.wraps(func)
@@ -239,14 +239,14 @@ def retry(
                 logger.error(f"{func.__name__} échoué après {nb_tentatives} tentatives")
                 raise dernier_erreur
 
-            return cast(Callable[..., T], sync_wrapper)
+            return cast("Callable[..., T]", sync_wrapper)
 
     return decorator
 
 
 __all__ = [
+    "cache_resultat",
     "log_appel",
     "metriques",
-    "cache_resultat",
     "retry",
 ]

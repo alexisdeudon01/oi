@@ -31,8 +31,8 @@ from .monitor import TailnetMonitor, run_monitor_async, run_monitor_interactive
 __all__ = [
     # Models
     "DeviceState",
-    "NetworkSnapshot",
     "HealthMetrics",
+    "NetworkSnapshot",
     # Monitor
     "TailnetMonitor",
     "run_monitor_async",

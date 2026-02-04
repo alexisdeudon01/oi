@@ -3,4 +3,4 @@
 # Re-export from the new SOLID tailscale module
 from ..tailscale import DeviceState, NetworkSnapshot, TailnetMonitor
 
-__all__ = ["TailnetMonitor", "DeviceState", "NetworkSnapshot"]
+__all__ = ["DeviceState", "NetworkSnapshot", "TailnetMonitor"]

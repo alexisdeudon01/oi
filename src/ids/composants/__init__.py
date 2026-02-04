@@ -14,8 +14,8 @@ ConnectivityChecker = ConnectivityTester
 
 __all__ = [
     "BaseComponent",
-    "ConnectivityTester",
     "ConnectivityChecker",
+    "ConnectivityTester",
     "DeviceState",
     "DockerManager",
     "MetricsCollector",

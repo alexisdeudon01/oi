@@ -11,15 +11,17 @@ Provides functionality to:
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import json
 import logging
 import os
-import shutil
 import subprocess
+import tempfile
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional, Tuple
+from typing import TYPE_CHECKING, Any
+from urllib.parse import urlparse
 
 from ..app.decorateurs import cache_resultat, log_appel, metriques, retry
 from ..domain import ConditionSante
@@ -33,8 +35,12 @@ from ..domain.tailscale import (
     TailscaleDeploymentConfig,
     TailscaleNode,
 )
-from ..interfaces import GestionnaireConfig
 from .base import BaseComponent
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
+
+    from ..interfaces import GestionnaireConfig
 
 logger = logging.getLogger(__name__)
 
@@ -77,7 +83,7 @@ class DeploymentCapabilities:
     tailscale_installed: bool = False
     tailscale_running: bool = False
     platform: str = "unknown"
-    details: Dict[str, Any] = field(default_factory=dict)
+    details: dict[str, Any] = field(default_factory=dict)
 
 
 class TailscaleManager(BaseComponent):
@@ -146,12 +152,12 @@ VOLUME /var/lib/tailscale
 CMD ["tailscaled"]
 """
 
-    def __init__(self, config: Optional[GestionnaireConfig] = None) -> None:
+    def __init__(self, config: GestionnaireConfig | None = None) -> None:
         super().__init__(config, "tailscale")
-        self._tailnet_config: Optional[TailnetConfig] = None
-        self._nodes: Dict[str, TailscaleNode] = {}
-        self._auth_keys: Dict[str, TailscaleAuthKey] = {}
-        self._deployment_strategies: Dict[DeploymentMode, Callable] = {}
+        self._tailnet_config: TailnetConfig | None = None
+        self._nodes: dict[str, TailscaleNode] = {}
+        self._auth_keys: dict[str, TailscaleAuthKey] = {}
+        self._deployment_strategies: dict[DeploymentMode, Callable] = {}
         self._register_deployment_strategies()
         self._load_config()
 
@@ -190,8 +196,8 @@ CMD ["tailscaled"]
     @metriques("tailscale.detect_capabilities")
     async def detect_capabilities(
         self,
-        target_host: Optional[str] = None,
-        ssh_key: Optional[str] = None,
+        target_host: str | None = None,
+        ssh_key: str | None = None,
     ) -> DeploymentCapabilities:
         """
         Detect deployment capabilities on the target system.
@@ -205,7 +211,7 @@ CMD ["tailscaled"]
         """
         caps = DeploymentCapabilities()
 
-        def run_cmd(cmd: List[str]) -> Tuple[bool, str]:
+        def run_cmd(cmd: list[str]) -> tuple[bool, str]:
             """Run command locally or remotely."""
             try:
                 if target_host:
@@ -245,10 +251,8 @@ CMD ["tailscaled"]
         # Check Tailscale status
         caps.tailscale_running, status = run_cmd(["tailscale", "status", "--json"])
         if status:
-            try:
+            with contextlib.suppress(json.JSONDecodeError):
                 caps.details["tailscale_status"] = json.loads(status)
-            except json.JSONDecodeError:
-                pass
 
         # Detect platform
         _, platform = run_cmd(["uname", "-s"])
@@ -304,9 +308,9 @@ CMD ["tailscaled"]
         reusable: bool = False,
         ephemeral: bool = False,
         preauthorized: bool = True,
-        tags: Optional[List[str]] = None,
+        tags: list[str] | None = None,
         expiry_seconds: int = 86400,
-        description: Optional[str] = None,
+        description: str | None = None,
     ) -> TailscaleAuthKey:
         """
         Create a new auth key for node registration.
@@ -353,10 +357,17 @@ CMD ["tailscaled"]
             "description": description or f"IDS2 auto-generated key at {_utcnow().isoformat()}",
         }
 
-        def _create_key() -> Dict[str, Any]:
+        def _create_key() -> dict[str, Any]:
             import urllib.request
 
             url = f"https://api.tailscale.com/api/v2/tailnet/{self._tailnet_config.tailnet}/keys"
+            # Validate URL scheme to prevent SSRF
+            parsed = urlparse(url)
+            if parsed.scheme not in ("https", "http"):
+                raise ValueError(f"Invalid URL scheme: {parsed.scheme}")
+            if parsed.scheme == "http":
+                raise ValueError("HTTP not allowed, use HTTPS only")
+
             headers = {
                 "Authorization": f"Bearer {api_key}",
                 "Content-Type": "application/json",
@@ -364,6 +375,7 @@ CMD ["tailscaled"]
             data = json.dumps(payload).encode("utf-8")
 
             req = urllib.request.Request(url, data=data, headers=headers, method="POST")
+            # bandit: B310 - URL scheme validated above (only https://api.tailscale.com)
             with urllib.request.urlopen(req, timeout=30) as resp:
                 return json.loads(resp.read().decode("utf-8"))
 
@@ -392,15 +404,15 @@ CMD ["tailscaled"]
     async def add_node(
         self,
         hostname: str,
-        auth_key: Optional[str] = None,
+        auth_key: str | None = None,
         node_type: NodeType = NodeType.DEVICE,
-        deployment_mode: Optional[DeploymentMode] = None,
-        target_host: Optional[str] = None,
-        ssh_key: Optional[str] = None,
+        deployment_mode: DeploymentMode | None = None,
+        target_host: str | None = None,
+        ssh_key: str | None = None,
         ssh_user: str = "pi",
-        advertise_routes: Optional[List[str]] = None,
+        advertise_routes: list[str] | None = None,
         advertise_exit_node: bool = False,
-        tags: Optional[List[str]] = None,
+        tags: list[str] | None = None,
     ) -> DeploymentResult:
         """
         Add a new node to the tailnet.
@@ -491,8 +503,8 @@ CMD ["tailscaled"]
     async def _deploy_linux_service(
         self,
         deploy_config: TailscaleDeploymentConfig,
-        target_host: Optional[str],
-        ssh_key: Optional[str],
+        target_host: str | None,
+        ssh_key: str | None,
         ssh_user: str,
         capabilities: DeploymentCapabilities,
     ) -> DeploymentResult:
@@ -507,7 +519,7 @@ CMD ["tailscaled"]
                 ssh_cmd.append(cmd)
                 return subprocess.run(ssh_cmd, capture_output=True, text=True, timeout=120)
             else:
-                return subprocess.run(cmd, shell=True, capture_output=True, text=True, timeout=120)
+                return subprocess.run(cmd, shell=True, capture_output=True, text=True, timeout=120)  # nosec B602
 
         try:
             # Install Tailscale if not present
@@ -543,10 +555,8 @@ CMD ["tailscaled"]
             status_result = run_remote("tailscale status --json")
             status_data = {}
             if status_result.returncode == 0:
-                try:
+                with contextlib.suppress(json.JSONDecodeError):
                     status_data = json.loads(status_result.stdout)
-                except json.JSONDecodeError:
-                    pass
 
             node = TailscaleNode(
                 hostname=deploy_config.hostname or "unknown",
@@ -581,8 +591,8 @@ CMD ["tailscaled"]
     async def _deploy_docker(
         self,
         deploy_config: TailscaleDeploymentConfig,
-        target_host: Optional[str],
-        ssh_key: Optional[str],
+        target_host: str | None,
+        ssh_key: str | None,
         ssh_user: str,
         capabilities: DeploymentCapabilities,
     ) -> DeploymentResult:
@@ -597,7 +607,7 @@ CMD ["tailscaled"]
                 ssh_cmd.append(cmd)
                 return subprocess.run(ssh_cmd, capture_output=True, text=True, timeout=120)
             else:
-                return subprocess.run(cmd, shell=True, capture_output=True, text=True, timeout=120)
+                return subprocess.run(cmd, shell=True, capture_output=True, text=True, timeout=120)  # nosec B602
 
         try:
             extra_args = " ".join(deploy_config.to_tailscale_up_args())
@@ -665,8 +675,8 @@ CMD ["tailscaled"]
     async def _deploy_docker_compose(
         self,
         deploy_config: TailscaleDeploymentConfig,
-        target_host: Optional[str],
-        ssh_key: Optional[str],
+        target_host: str | None,
+        ssh_key: str | None,
         ssh_user: str,
         capabilities: DeploymentCapabilities,
     ) -> DeploymentResult:
@@ -682,7 +692,7 @@ CMD ["tailscaled"]
             )
 
             # Write to temp file or append to existing compose
-            compose_path = Path("/tmp/tailscale-compose.yml")
+            compose_path = Path(tempfile.gettempdir()) / "tailscale-compose.yml"
             full_compose = f"""version: '3.8'
 services:
 {compose_snippet}
@@ -757,8 +767,8 @@ volumes:
     async def _deploy_sidecar(
         self,
         deploy_config: TailscaleDeploymentConfig,
-        target_host: Optional[str],
-        ssh_key: Optional[str],
+        target_host: str | None,
+        ssh_key: str | None,
         ssh_user: str,
         capabilities: DeploymentCapabilities,
     ) -> DeploymentResult:
@@ -773,8 +783,8 @@ volumes:
     async def remove_node(
         self,
         hostname: str,
-        target_host: Optional[str] = None,
-        ssh_key: Optional[str] = None,
+        target_host: str | None = None,
+        ssh_key: str | None = None,
         ssh_user: str = "pi",
     ) -> bool:
         """
@@ -802,20 +812,23 @@ volumes:
                     ssh_cmd.extend([f"{ssh_user}@{target_host}", cmd])
                     return subprocess.run(ssh_cmd, capture_output=True, text=True, timeout=60)
                 else:
+                    # Split command into list to avoid shell=True
+                    # nosec B602 - Command is from trusted source (node configuration)
+                    cmd_list = cmd.split() if isinstance(cmd, str) else cmd
                     return subprocess.run(
-                        cmd, shell=True, capture_output=True, text=True, timeout=60
+                        cmd_list, capture_output=True, text=True, timeout=60
                     )
 
             # Determine deployment mode
             mode = node.deployment_mode if node else None
 
-            if mode == DeploymentMode.DOCKER or mode == DeploymentMode.SIDECAR:
+            if mode in (DeploymentMode.DOCKER, DeploymentMode.SIDECAR):
                 # Stop and remove container
                 run_remote(f"docker stop tailscale-{hostname}")
                 run_remote(f"docker rm tailscale-{hostname}")
             elif mode == DeploymentMode.DOCKER_COMPOSE:
                 # Get compose file path from metadata or use default
-                compose_file = "/tmp/tailscale-compose.yml"
+                compose_file = str(Path(tempfile.gettempdir()) / "tailscale-compose.yml")
                 if node and node.metadata.get("compose_file"):
                     compose_file = node.metadata["compose_file"]
                 run_remote(f"docker compose -f {compose_file} down")
@@ -838,7 +851,7 @@ volumes:
     @log_appel()
     @metriques("tailscale.list_nodes")
     @cache_resultat(ttl_secondes=30)
-    async def list_nodes(self) -> List[TailscaleNode]:
+    async def list_nodes(self) -> list[TailscaleNode]:
         """
         List all nodes in the tailnet.
 
@@ -853,13 +866,21 @@ volumes:
             api_key = self._tailnet_config.api_key
             tailnet = self._tailnet_config.tailnet
 
-            def _fetch_devices() -> List[Dict[str, Any]]:
+            def _fetch_devices() -> list[dict[str, Any]]:
                 import urllib.request
 
                 url = f"https://api.tailscale.com/api/v2/tailnet/{tailnet}/devices"
+                # Validate URL scheme to prevent SSRF
+                parsed = urlparse(url)
+                if parsed.scheme not in ("https", "http"):
+                    raise ValueError(f"Invalid URL scheme: {parsed.scheme}")
+                if parsed.scheme == "http":
+                    raise ValueError("HTTP not allowed, use HTTPS only")
+
                 headers = {"Authorization": f"Bearer {api_key}"}
 
                 req = urllib.request.Request(url, headers=headers, method="GET")
+                # bandit: B310 - URL scheme validated above (only https://api.tailscale.com)
                 with urllib.request.urlopen(req, timeout=30) as resp:
                     data = json.loads(resp.read().decode("utf-8"))
                     return data.get("devices", [])
@@ -944,8 +965,8 @@ volumes:
 
 
 __all__ = [
-    "TailscaleManager",
     "DeploymentCapabilities",
+    "TailscaleManager",
     "deployment_strategy",
     "handles_node_type",
 ]

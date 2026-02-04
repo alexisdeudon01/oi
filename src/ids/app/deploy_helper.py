@@ -9,9 +9,12 @@ import subprocess
 import tempfile
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Iterable, Optional, Sequence
+from typing import TYPE_CHECKING
 
 import requests
+
+if TYPE_CHECKING:
+    from collections.abc import Sequence
 
 logger = logging.getLogger(__name__)
 
@@ -28,7 +31,7 @@ class DeployConfig:
     requirements_path: str = "requirements.txt"
     config_path: str = "config.yaml"
     secret_path: str = "secret.json"
-    opensearch_endpoint: Optional[str] = None
+    opensearch_endpoint: str | None = None
     ssh_options: Sequence[str] = field(
         default_factory=lambda: ("-o", "BatchMode=yes", "-o", "ConnectTimeout=5")
     )
@@ -45,7 +48,7 @@ class CommandRunner:
 class DeployHelper:
     """Automatise le build/push et l'installation sur le Raspberry Pi."""
 
-    def __init__(self, config: DeployConfig, runner: Optional[CommandRunner] = None) -> None:
+    def __init__(self, config: DeployConfig, runner: CommandRunner | None = None) -> None:
         self.config = config
         self.runner = runner or CommandRunner()
 
@@ -89,7 +92,8 @@ class DeployHelper:
 
     def transfer_image(self, tar_path: Path) -> None:
         """Transfere l'image sur le Pi et la charge."""
-        remote_tar = f"/tmp/{tar_path.name}"
+        # Use system temp directory instead of hardcoded /tmp
+        remote_tar = f"{tempfile.gettempdir()}/{tar_path.name}"
         self._scp(tar_path, remote_tar)
         self._ssh(f"docker load -i {remote_tar}")
         self._ssh(f"rm -f {remote_tar}")

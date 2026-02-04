@@ -1,5 +1,4 @@
 import os
-from typing import Optional
 
 from ..app.decorateurs import log_appel, metriques, retry
 from ..domain import ConditionSante, MetriquesSystem
@@ -12,7 +11,7 @@ class ResourceController(BaseComponent, MetriquesProvider):
 
     def __init__(self, config: GestionnaireConfig) -> None:
         super().__init__(config, "resource_controller")
-        self._last_metrics: Optional[MetriquesSystem] = None
+        self._last_metrics: MetriquesSystem | None = None
 
     @log_appel()
     @metriques("resources.collect")

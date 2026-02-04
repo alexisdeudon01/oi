@@ -7,8 +7,6 @@ Uses the official Python `tailscale` library.
 
 from __future__ import annotations
 
-from typing import List
-
 from .interfaces import BaseAPIClient
 from .models import DeviceState
 
@@ -43,7 +41,7 @@ class TailscaleLibraryClient(BaseAPIClient):
             )
         super().__init__(tailnet, api_key)
 
-    async def get_devices(self) -> List[DeviceState]:
+    async def get_devices(self) -> list[DeviceState]:
         """
         Fetch all devices from the Tailscale API.
 
@@ -53,7 +51,7 @@ class TailscaleLibraryClient(BaseAPIClient):
         async with Tailscale(tailnet=self.tailnet, api_key=self._api_key) as client:
             response = await client.devices()
 
-            devices: List[DeviceState] = []
+            devices: list[DeviceState] = []
             for device_id, device in response.devices.items():
                 addresses = device.addresses or []
                 # Get first IPv4 address
@@ -90,7 +88,7 @@ class RequestsAPIClient(BaseAPIClient):
         super().__init__(tailnet, api_key)
         self._base_url = f"https://api.tailscale.com/api/v2/tailnet/{tailnet}"
 
-    async def get_devices(self) -> List[DeviceState]:
+    async def get_devices(self) -> list[DeviceState]:
         """Fetch devices using requests library."""
         import requests  # type: ignore[import-untyped]
 
@@ -102,7 +100,7 @@ class RequestsAPIClient(BaseAPIClient):
         response.raise_for_status()
         data = response.json().get("devices", [])
 
-        devices: List[DeviceState] = []
+        devices: list[DeviceState] = []
         for d in data:
             addresses = d.get("addresses", [])
             devices.append(

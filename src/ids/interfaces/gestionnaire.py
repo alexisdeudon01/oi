@@ -1,38 +1,4 @@
 """
-Protocol for managed components.
-"""
-
-from typing import Protocol
-
-from ..domain import ConditionSante
-
-
-class GestionnaireComposant(Protocol):
-    """Interface for managed components (services/managers)."""
-
-    async def demarrer(self) -> None:
-        """Start the component."""
-
-        ...
-
-    async def arreter(self) -> None:
-        """Stop the component."""
-
-        ...
-
-    async def verifier_sante(self) -> ConditionSante:
-        """Return component health."""
-
-        ...
-
-    async def recharger_config(self) -> None:
-        """Reload component configuration."""
-
-        ...
-
-
-__all__ = ["GestionnaireComposant"]
-"""
 Interface GestionnaireComposant - Contrat pour les composants gérés.
 
 Définit le Protocol pour tous les composants du système (Suricata, Docker, etc.).
@@ -78,6 +44,4 @@ class GestionnaireComposant(Protocol):
         ...
 
 
-__all__ = [
-    "GestionnaireComposant",
-]
+__all__ = ["GestionnaireComposant"]

@@ -7,9 +7,9 @@ from .decorateurs import cache_resultat, log_appel, metriques, retry
 # AgentSupervisor and main should be imported from ids.app.supervisor directly
 
 __all__ = [
+    "cache_resultat",
     "log_appel",
     "metriques",
-    "cache_resultat",
     "retry",
 ]
 

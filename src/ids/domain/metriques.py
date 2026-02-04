@@ -4,7 +4,7 @@ Metriques et etat de sante du systeme IDS.
 
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Any, Dict
+from typing import Any
 
 
 @dataclass(frozen=True)
@@ -18,7 +18,7 @@ class MetriquesSystem:
     alertes_en_queue: int = 0
     uptime_secondes: int = 0
     erreurs_recentes: int = 0
-    metadata: Dict[str, Any] = field(default_factory=dict)
+    metadata: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)
@@ -29,10 +29,10 @@ class ConditionSante:
     sain: bool
     message: str = ""
     derniere_verification: datetime = field(default_factory=datetime.utcnow)
-    details: Dict[str, Any] = field(default_factory=dict)
+    details: dict[str, Any] = field(default_factory=dict)
 
 
 __all__ = [
-    "MetriquesSystem",
     "ConditionSante",
+    "MetriquesSystem",
 ]

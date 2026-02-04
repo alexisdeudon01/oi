@@ -2,7 +2,6 @@
 
 import asyncio
 import logging
-from typing import Optional
 
 from ..app.decorateurs import log_appel, metriques, retry
 from ..domain import ConditionSante
@@ -12,7 +11,7 @@ from ..interfaces import GestionnaireConfig, PipelineStatusProvider
 class BaseComponent(PipelineStatusProvider):
     """Base class for managed components."""
 
-    def __init__(self, arg1, arg2: Optional[GestionnaireConfig] = None) -> None:
+    def __init__(self, arg1, arg2: GestionnaireConfig | None = None) -> None:
         # Support both (config, name) and (name, config) for backward compatibility.
         if isinstance(arg1, str):
             nom_composant = arg1
@@ -21,7 +20,7 @@ class BaseComponent(PipelineStatusProvider):
             config = arg1
             nom_composant = arg2 or self.__class__.__name__.lower()
 
-        self._config: Optional[GestionnaireConfig] = config
+        self._config: GestionnaireConfig | None = config
         self.nom_composant = nom_composant
         self.nom = nom_composant
         self._shutdown_event = asyncio.Event()

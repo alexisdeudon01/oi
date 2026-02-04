@@ -7,7 +7,7 @@ Defines data structures for nodes, tailnet configuration, and deployment modes.
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from enum import Enum, auto
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 
 def _utcnow() -> datetime:
@@ -50,18 +50,18 @@ class TailscaleNode:
     """Represents a node in the Tailscale network."""
 
     hostname: str
-    node_id: Optional[str] = None
-    ip_addresses: List[str] = field(default_factory=list)
-    tailnet_ip: Optional[str] = None
+    node_id: str | None = None
+    ip_addresses: list[str] = field(default_factory=list)
+    tailnet_ip: str | None = None
     node_type: NodeType = NodeType.DEVICE
     status: NodeStatus = NodeStatus.PENDING
     authorized: bool = False
-    last_seen: Optional[datetime] = None
-    created_at: Optional[datetime] = None
-    tags: List[str] = field(default_factory=list)
-    advertised_routes: List[str] = field(default_factory=list)
-    deployment_mode: Optional[DeploymentMode] = None
-    metadata: Dict[str, Any] = field(default_factory=dict)
+    last_seen: datetime | None = None
+    created_at: datetime | None = None
+    tags: list[str] = field(default_factory=list)
+    advertised_routes: list[str] = field(default_factory=list)
+    deployment_mode: DeploymentMode | None = None
+    metadata: dict[str, Any] = field(default_factory=dict)
 
     def is_online(self) -> bool:
         """Check if node is online."""
@@ -82,12 +82,12 @@ class TailscaleAuthKey:
     key: str
     key_id: str
     created_at: datetime
-    expires_at: Optional[datetime] = None
+    expires_at: datetime | None = None
     reusable: bool = False
     ephemeral: bool = False
     preauthorized: bool = True
-    tags: List[str] = field(default_factory=list)
-    description: Optional[str] = None
+    tags: list[str] = field(default_factory=list)
+    description: str | None = None
 
     def is_expired(self) -> bool:
         """Check if the auth key has expired."""
@@ -101,17 +101,17 @@ class TailnetConfig:
     """Configuration for a Tailscale tailnet."""
 
     tailnet: str  # Tailnet name (e.g., "example.com" or organization name)
-    api_key: Optional[str] = None
-    oauth_client_id: Optional[str] = None
-    oauth_client_secret: Optional[str] = None
-    auth_key: Optional[str] = None  # Pre-generated auth key for node registration
-    default_tags: List[str] = field(default_factory=list)
-    acl_policy: Optional[Dict[str, Any]] = None
+    api_key: str | None = None
+    oauth_client_id: str | None = None
+    oauth_client_secret: str | None = None
+    auth_key: str | None = None  # Pre-generated auth key for node registration
+    default_tags: list[str] = field(default_factory=list)
+    acl_policy: dict[str, Any] | None = None
     dns_enabled: bool = True
     magic_dns: bool = True
     exit_node_enabled: bool = False
-    subnet_routes: List[str] = field(default_factory=list)
-    metadata: Dict[str, Any] = field(default_factory=dict)
+    subnet_routes: list[str] = field(default_factory=list)
+    metadata: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass
@@ -120,17 +120,17 @@ class TailscaleDeploymentConfig:
 
     mode: DeploymentMode
     auth_key: str
-    hostname: Optional[str] = None
+    hostname: str | None = None
     advertise_exit_node: bool = False
-    advertise_routes: List[str] = field(default_factory=list)
+    advertise_routes: list[str] = field(default_factory=list)
     accept_routes: bool = True
     accept_dns: bool = True
     shields_up: bool = False
     ssh: bool = False
-    tags: List[str] = field(default_factory=list)
-    extra_args: List[str] = field(default_factory=list)
+    tags: list[str] = field(default_factory=list)
+    extra_args: list[str] = field(default_factory=list)
 
-    def to_tailscale_up_args(self) -> List[str]:
+    def to_tailscale_up_args(self) -> list[str]:
         """Generate arguments for 'tailscale up' command."""
         args = [f"--authkey={self.auth_key}"]
 
@@ -160,20 +160,20 @@ class DeploymentResult:
     """Result of a Tailscale deployment operation."""
 
     success: bool
-    node: Optional[TailscaleNode] = None
-    mode: Optional[DeploymentMode] = None
+    node: TailscaleNode | None = None
+    mode: DeploymentMode | None = None
     message: str = ""
-    error: Optional[str] = None
-    details: Dict[str, Any] = field(default_factory=dict)
+    error: str | None = None
+    details: dict[str, Any] = field(default_factory=dict)
 
 
 __all__ = [
     "DeploymentMode",
+    "DeploymentResult",
     "NodeStatus",
     "NodeType",
-    "TailscaleNode",
-    "TailscaleAuthKey",
     "TailnetConfig",
+    "TailscaleAuthKey",
     "TailscaleDeploymentConfig",
-    "DeploymentResult",
+    "TailscaleNode",
 ]

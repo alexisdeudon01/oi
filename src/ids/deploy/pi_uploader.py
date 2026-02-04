@@ -8,9 +8,10 @@ import json
 import logging
 import shlex
 import subprocess
+import tempfile
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Callable, Iterable, List, Optional, Sequence, Tuple
 
 import yaml
 
@@ -37,17 +38,17 @@ class DeployConfig:
     pi_host: str
     pi_user: str = "pi"
     pi_port: int = 22
-    pi_ssh_key: Optional[Path] = None
-    sudo_password: Optional[str] = None
+    pi_ssh_key: Path | None = None
+    sudo_password: str | None = None
     remote_dir: Path = Path("/opt/ids2")
     image_name: str = "ids2-agent"
     image_tag: str = "latest"
     dockerfile: Path = Path("Dockerfile")
-    opensearch_endpoint: Optional[str] = None
+    opensearch_endpoint: str | None = None
     run_install: bool = True
     include_tests: bool = False
-    test_artifacts: List[Path] = field(default_factory=list)
-    sync_paths: Optional[List[Path]] = None
+    test_artifacts: list[Path] = field(default_factory=list)
+    sync_paths: list[Path] | None = None
     verbose: bool = False
 
     @property
@@ -75,12 +76,12 @@ def _load_json(path: Path) -> dict:
     return data if isinstance(data, dict) else {}
 
 
-def _extract_pi_host(config_data: dict) -> Optional[str]:
+def _extract_pi_host(config_data: dict) -> str | None:
     raspberry = config_data.get("raspberry_pi", {}) if isinstance(config_data, dict) else {}
     return raspberry.get("pi_ip") or raspberry.get("host")
 
 
-def _extract_opensearch_endpoint(config_data: dict) -> Optional[str]:
+def _extract_opensearch_endpoint(config_data: dict) -> str | None:
     aws = config_data.get("aws", {}) if isinstance(config_data, dict) else {}
     endpoint = aws.get("opensearch_endpoint")
     if endpoint:
@@ -91,9 +92,9 @@ def _extract_opensearch_endpoint(config_data: dict) -> Optional[str]:
 
 def load_deploy_config(
     config_path: Path,
-    repo_root: Optional[Path] = None,
-    pi_host: Optional[str] = None,
-    opensearch_endpoint: Optional[str] = None,
+    repo_root: Path | None = None,
+    pi_host: str | None = None,
+    opensearch_endpoint: str | None = None,
     **overrides: object,
 ) -> DeployConfig:
     config_data = load_yaml_config(config_path)
@@ -121,7 +122,7 @@ def run_command(
     *,
     capture_output: bool = False,
     check: bool = True,
-    input_data: Optional[str] = None,
+    input_data: str | None = None,
 ) -> subprocess.CompletedProcess:
     command = [str(arg) for arg in args]
     logger.debug("Running command: %s", " ".join(shlex.quote(part) for part in command))
@@ -139,7 +140,7 @@ def _runner_supports_input(runner: Runner) -> bool:
     return "input" in signature.parameters
 
 
-def _base_ssh_options(config: DeployConfig) -> List[str]:
+def _base_ssh_options(config: DeployConfig) -> list[str]:
     options = [
         "-o",
         "BatchMode=yes",
@@ -153,7 +154,7 @@ def _base_ssh_options(config: DeployConfig) -> List[str]:
     return options
 
 
-def build_ssh_command(config: DeployConfig, remote_command: str) -> List[str]:
+def build_ssh_command(config: DeployConfig, remote_command: str) -> list[str]:
     return [
         "ssh",
         "-p",
@@ -164,7 +165,7 @@ def build_ssh_command(config: DeployConfig, remote_command: str) -> List[str]:
     ]
 
 
-def build_scp_command(config: DeployConfig, local_path: Path, remote_path: str) -> List[str]:
+def build_scp_command(config: DeployConfig, local_path: Path, remote_path: str) -> list[str]:
     return [
         "scp",
         "-P",
@@ -175,7 +176,7 @@ def build_scp_command(config: DeployConfig, local_path: Path, remote_path: str) 
     ]
 
 
-def build_rsync_command(config: DeployConfig, local_path: Path, remote_path: Path) -> List[str]:
+def build_rsync_command(config: DeployConfig, local_path: Path, remote_path: Path) -> list[str]:
     ssh_parts = ["ssh", "-p", str(config.pi_port), *_base_ssh_options(config)]
     ssh_command = " ".join(shlex.quote(part) for part in ssh_parts)
     local_value = str(local_path)
@@ -257,7 +258,7 @@ def build_image(config: DeployConfig, runner: Runner = subprocess.run) -> None:
 
 
 def save_image(
-    config: DeployConfig, runner: Runner = subprocess.run, output_dir: Optional[Path] = None
+    config: DeployConfig, runner: Runner = subprocess.run, output_dir: Path | None = None
 ) -> Path:
     output_root = output_dir or (config.repo_root / "dist")
     output_root.mkdir(parents=True, exist_ok=True)
@@ -270,7 +271,8 @@ def save_image(
 def upload_and_load_image(
     config: DeployConfig, tar_path: Path, runner: Runner = subprocess.run
 ) -> None:
-    remote_tar = f"/tmp/{tar_path.name}"
+    # Use system temp directory instead of hardcoded /tmp
+    remote_tar = f"{tempfile.gettempdir()}/{tar_path.name}"
     run_command(build_scp_command(config, tar_path, remote_tar), runner)
     run_ssh_command(config, f"docker load -i {shlex.quote(remote_tar)}", runner, sudo=True)
     run_ssh_command(config, f"rm -f {shlex.quote(remote_tar)}", runner)
@@ -283,8 +285,8 @@ def ensure_remote_root(config: DeployConfig, runner: Runner = subprocess.run) ->
     run_ssh_command(config, command, runner, sudo=True)
 
 
-def collect_sync_entries(config: DeployConfig) -> List[Tuple[Path, Path]]:
-    paths: List[Path] = []
+def collect_sync_entries(config: DeployConfig) -> list[tuple[Path, Path]]:
+    paths: list[Path] = []
     if config.sync_paths is not None:
         paths = list(config.sync_paths)
     else:
@@ -294,7 +296,7 @@ def collect_sync_entries(config: DeployConfig) -> List[Tuple[Path, Path]]:
         if config.test_artifacts:
             paths.extend(config.test_artifacts)
 
-    entries: List[Tuple[Path, Path]] = []
+    entries: list[tuple[Path, Path]] = []
     for path in paths:
         local_path = path if path.is_absolute() else config.repo_root / path
         if not local_path.exists():
@@ -321,7 +323,7 @@ def sync_paths(config: DeployConfig, runner: Runner = subprocess.run) -> None:
         run_command(build_rsync_command(config, local_path, remote_path), runner)
 
 
-def render_env_file(config: DeployConfig) -> Optional[Path]:
+def render_env_file(config: DeployConfig) -> Path | None:
     """Crée un fichier docker/.env à partir de config.yaml et secret.json."""
     config_path = config.repo_root / "config.yaml"
     config_data = load_yaml_config(config_path)
@@ -334,7 +336,7 @@ def render_env_file(config: DeployConfig) -> Optional[Path]:
 
     secret_aws = secret_data.get("aws", {}) if isinstance(secret_data, dict) else {}
 
-    env_lines: List[str] = []
+    env_lines: list[str] = []
     if secret_aws.get("access_key_id"):
         env_lines.append(f"AWS_ACCESS_KEY_ID={secret_aws['access_key_id']}")
     if secret_aws.get("secret_access_key"):
@@ -398,7 +400,7 @@ def deploy_to_pi(config: DeployConfig, runner: Runner = subprocess.run) -> Path:
     return tar_path
 
 
-def _parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
+def _parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Upload/install flow for IDS2 on Raspberry Pi.")
     parser.add_argument("--config", default="config.yaml", help="Path to config.yaml")
     parser.add_argument("--repo-root", default=None, help="Repo root (defaults to config parent)")
@@ -424,7 +426,7 @@ def _parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
     return parser.parse_args(argv)
 
 
-def main(argv: Optional[Sequence[str]] = None) -> int:
+def main(argv: Sequence[str] | None = None) -> int:
     args = _parse_args(argv)
     config_path = Path(args.config).resolve()
     repo_root = Path(args.repo_root).resolve() if args.repo_root else config_path.parent

@@ -8,7 +8,7 @@ Charge et merge les secrets depuis secret.json.
 import json
 import logging
 from pathlib import Path
-from typing import Any, Dict, Optional, Union
+from typing import Any
 
 import yaml
 
@@ -24,7 +24,7 @@ class ConfigManager:
 
     def __init__(
         self,
-        config_path: Union[str, Dict[str, Any]] = "config.yaml",
+        config_path: str | dict[str, Any] = "config.yaml",
         secret_path: str = "secret.json",
     ):
         """
@@ -58,16 +58,16 @@ class ConfigManager:
     @classmethod
     def from_dict(
         cls,
-        config: Dict[str, Any],
+        config: dict[str, Any],
         secret_path: str = "secret.json",
     ) -> "ConfigManager":
         """Crée un ConfigManager à partir d'un dict en mémoire."""
         return cls(config, secret_path=secret_path)
 
-    def _charger_config(self) -> Dict[str, Any]:
+    def _charger_config(self) -> dict[str, Any]:
         """Charge le fichier YAML."""
         try:
-            with open(self.config_path, "r", encoding="utf-8") as f:
+            with open(self.config_path, encoding="utf-8") as f:
                 return yaml.safe_load(f) or {}
         except yaml.YAMLError as e:
             self.logger.error(f"Erreur lors du parsing YAML: {e}")
@@ -90,7 +90,7 @@ class ConfigManager:
             return
 
         try:
-            with open(self.secret_path, "r", encoding="utf-8") as f:
+            with open(self.secret_path, encoding="utf-8") as f:
                 secrets = json.load(f)
 
             self._merge_dicts(self._config, secrets)
@@ -106,7 +106,7 @@ class ConfigManager:
             self.logger.error(f"Erreur lors du chargement de secret.json: {e}")
             raise
 
-    def _merge_dicts(self, base: Dict[str, Any], overrides: Dict[str, Any]) -> None:
+    def _merge_dicts(self, base: dict[str, Any], overrides: dict[str, Any]) -> None:
         """Merge overrides into base recursively."""
         for key, value in overrides.items():
             if isinstance(value, dict) and isinstance(base.get(key), dict):
@@ -200,7 +200,7 @@ class ConfigManager:
         self._charger_secrets()
         self.logger.info("Configuration rechargée")
 
-    def get_all(self) -> Dict[str, Any]:
+    def get_all(self) -> dict[str, Any]:
         """Retourne la configuration complète."""
         return self._config.copy()
 

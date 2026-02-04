@@ -6,7 +6,6 @@ from __future__ import annotations
 
 import logging
 import time
-from typing import Optional
 
 from ..app.decorateurs import log_appel, metriques
 from ..domain import MetriquesSystem
@@ -19,7 +18,7 @@ logger = logging.getLogger(__name__)
 class MetricsCollector(BaseComponent, MetriquesProvider):
     """Collecte des metriques systeme minimales."""
 
-    def __init__(self, config: Optional[GestionnaireConfig] = None) -> None:
+    def __init__(self, config: GestionnaireConfig | None = None) -> None:
         super().__init__(config, "metrics_collector")
         self._start_time = time.monotonic()
 

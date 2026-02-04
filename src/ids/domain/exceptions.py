@@ -54,12 +54,12 @@ class DepassementRessources(ErreurIDS):
 
 
 __all__ = [
-    "ErreurIDS",
-    "ErreurConfiguration",
-    "ErreurConnexion",
-    "ErreurSuricata",
-    "ErreurDocker",
-    "ErreurAWS",
     "AlerteSourceIndisponible",
     "DepassementRessources",
+    "ErreurAWS",
+    "ErreurConfiguration",
+    "ErreurConnexion",
+    "ErreurDocker",
+    "ErreurIDS",
+    "ErreurSuricata",
 ]

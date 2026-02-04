@@ -7,7 +7,7 @@ Definit les niveaux de severite, types d'alertes et le modele AlerteIDS.
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
-from typing import Any, Dict
+from typing import Any
 from uuid import UUID, uuid4
 
 
@@ -43,7 +43,7 @@ class AlerteIDS:
     protocole: str = "TCP"
     signature: str = ""
     description: str = ""
-    metadata: Dict[str, Any] = field(default_factory=dict)
+    metadata: dict[str, Any] = field(default_factory=dict)
 
     def __hash__(self) -> int:
         return hash((self.id, self.timestamp, self.source_ip))
@@ -57,7 +57,7 @@ class AlerteIDS:
 
 
 __all__ = [
+    "AlerteIDS",
     "SeveriteAlerte",
     "TypeAlerte",
-    "AlerteIDS",
 ]

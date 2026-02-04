@@ -4,19 +4,21 @@ Generation minimale de configuration Suricata.
 
 from __future__ import annotations
 
-from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import TYPE_CHECKING, Any
 
 import yaml
 
-from ..interfaces import GestionnaireConfig
+if TYPE_CHECKING:
+    from pathlib import Path
+
+    from ..interfaces import GestionnaireConfig
 
 
 def build_suricata_config(
     interface: str,
     log_path: str,
     home_net: str = "192.168.0.0/16",
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     return {
         "vars": {"address-groups": {"HOME_NET": home_net}},
         "af-packet": [{"interface": interface}],
@@ -25,7 +27,7 @@ def build_suricata_config(
 
 
 def generer_config_suricata(
-    config: Optional[GestionnaireConfig],
+    config: GestionnaireConfig | None,
     dest_path: Path,
 ) -> None:
     """Genere une configuration Suricata minimale."""

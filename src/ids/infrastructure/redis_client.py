@@ -6,12 +6,14 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from typing import Optional
+from typing import TYPE_CHECKING
 
 import redis
 
 from ..app.decorateurs import log_appel, metriques, retry
-from ..interfaces import GestionnaireConfig
+
+if TYPE_CHECKING:
+    from ..interfaces import GestionnaireConfig
 
 logger = logging.getLogger(__name__)
 
@@ -19,7 +21,7 @@ logger = logging.getLogger(__name__)
 class RedisClient:
     """Client Redis avec ping simple."""
 
-    def __init__(self, config: Optional[GestionnaireConfig] = None) -> None:
+    def __init__(self, config: GestionnaireConfig | None = None) -> None:
         host = "localhost"
         port = 6379
         db = 0

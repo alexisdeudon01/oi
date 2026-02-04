@@ -5,7 +5,7 @@ Contient les parametres globaux de l'agent.
 """
 
 from dataclasses import dataclass, field
-from typing import Any, Dict, Optional
+from typing import Any
 
 
 @dataclass(frozen=True)
@@ -30,7 +30,7 @@ class ConfigurationIDS:
     # AWS OpenSearch
     aws_region: str = "eu-west-1"
     aws_opensearch_domain: str = "ids-opensearch"
-    aws_opensearch_endpoint: Optional[str] = None
+    aws_opensearch_endpoint: str | None = None
 
     # Docker
     docker_compose_path: str = "docker/docker-compose.yml"
@@ -40,7 +40,7 @@ class ConfigurationIDS:
     ram_limit_percent: float = 85.0
     throttling_enabled: bool = True
 
-    metadata: Dict[str, Any] = field(default_factory=dict)
+    metadata: dict[str, Any] = field(default_factory=dict)
 
 
 __all__ = [

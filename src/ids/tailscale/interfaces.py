@@ -8,9 +8,10 @@ Interface Segregation Principle: Focused, minimal interfaces.
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import List, Optional, Protocol, runtime_checkable
+from typing import TYPE_CHECKING, Protocol, runtime_checkable
 
-from .models import DeviceState, NetworkSnapshot
+if TYPE_CHECKING:
+    from .models import DeviceState, NetworkSnapshot
 
 
 @runtime_checkable
@@ -21,7 +22,7 @@ class TailscaleAPIClient(Protocol):
     Interface Segregation: Only defines device fetching capability.
     """
 
-    async def get_devices(self) -> List[DeviceState]:
+    async def get_devices(self) -> list[DeviceState]:
         """Fetch all devices from the Tailscale API."""
         ...
 
@@ -34,7 +35,7 @@ class ConnectivityTester(Protocol):
     Interface Segregation: Only defines ping capability.
     """
 
-    def ping(self, ip: str, count: int = 3) -> Optional[float]:
+    def ping(self, ip: str, count: int = 3) -> float | None:
         """
         Ping a device and return latency in milliseconds.
 
@@ -73,7 +74,7 @@ class BaseAPIClient(ABC):
         self._api_key = api_key  # Protected, never exposed
 
     @abstractmethod
-    async def get_devices(self) -> List[DeviceState]:
+    async def get_devices(self) -> list[DeviceState]:
         """Fetch all devices from the Tailscale API."""
         pass
 
@@ -87,11 +88,11 @@ class BaseConnectivityTester(ABC):
     """
 
     @abstractmethod
-    def ping(self, ip: str, count: int = 3) -> Optional[float]:
+    def ping(self, ip: str, count: int = 3) -> float | None:
         """Ping a device and return latency."""
         pass
 
-    def ping_all(self, devices: List[DeviceState]) -> None:
+    def ping_all(self, devices: list[DeviceState]) -> None:
         """Ping all online devices and update their latency."""
         for device in devices:
             if device.is_online and device.tailscale_ip:

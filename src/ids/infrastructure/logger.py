@@ -5,7 +5,6 @@ Logging utilities for the IDS agent.
 from __future__ import annotations
 
 import logging
-from typing import Optional
 
 try:
     from pythonjsonlogger import jsonlogger
@@ -18,13 +17,13 @@ from ..interfaces import LoggerIDS
 class LoggerStandard(LoggerIDS):
     """Implementation simple basee sur logging."""
 
-    def __init__(self, nom: Optional[str] = None) -> None:
+    def __init__(self, nom: str | None = None) -> None:
         self._logger = logging.getLogger(nom or __name__)
 
     def info(self, message: str) -> None:
         self._logger.info(message)
 
-    def erreur(self, message: str, exception: Optional[Exception] = None) -> None:
+    def erreur(self, message: str, exception: Exception | None = None) -> None:
         self._logger.error(message, exc_info=exception is not None)
 
     def debug(self, message: str) -> None:

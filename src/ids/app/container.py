@@ -3,9 +3,10 @@ Injection de dependances - conteneur DI avec punq.
 """
 
 import logging
+from collections.abc import Callable
 from functools import lru_cache
 from pathlib import Path as _Path
-from typing import Any, Callable, Dict, Type, TypeVar, Union
+from typing import Any, TypeVar
 
 try:
     import punq
@@ -44,19 +45,19 @@ class ConteneurDI:
 
     def __init__(self) -> None:
         self._container = punq.Container()
-        self._instances: Dict[Type, Any] = {}
+        self._instances: dict[type, Any] = {}
         self._logger = logging.getLogger(__name__)
 
-    def enregistrer_singleton(self, interface: Type[T], instance: T) -> None:
+    def enregistrer_singleton(self, interface: type[T], instance: T) -> None:
         self._container.register(interface, instance=instance)
         self._instances[interface] = instance
         self._logger.debug("Singleton enregistre: %s", interface.__name__)
 
-    def enregistrer_factory(self, interface: Type[T], factory: Callable[..., T]) -> None:
+    def enregistrer_factory(self, interface: type[T], factory: Callable[..., T]) -> None:
         self._container.register(interface, factory=factory)
         self._logger.debug("Factory enregistree: %s", interface.__name__)
 
-    def enregistrer_services(self, config_source: Union[Dict[str, Any], str, _Path]) -> None:
+    def enregistrer_services(self, config_source: dict[str, Any] | str | _Path) -> None:
         self._logger.info("Enregistrement des services...")
 
         if isinstance(config_source, (str, _Path)):
@@ -118,7 +119,7 @@ class ConteneurDI:
 
         self._logger.info("Services enregistres avec succes")
 
-    def resoudre(self, service_type: Type[T]) -> T:
+    def resoudre(self, service_type: type[T]) -> T:
         if service_type in self._instances:
             return self._instances[service_type]
         instance = self._container.resolve(service_type)
@@ -126,7 +127,7 @@ class ConteneurDI:
         return instance
 
     @lru_cache(maxsize=128)
-    def resoudre_en_cache(self, service_type: Type[T]) -> T:
+    def resoudre_en_cache(self, service_type: type[T]) -> T:
         return self.resoudre(service_type)
 
 

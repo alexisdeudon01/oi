@@ -6,12 +6,11 @@ from __future__ import annotations
 
 import json
 from datetime import datetime
-from typing import Optional
 
 from ..domain.alerte import AlerteIDS, SeveriteAlerte, TypeAlerte
 
 
-def parse_eve_json_line(line: str) -> Optional[AlerteIDS]:
+def parse_eve_json_line(line: str) -> AlerteIDS | None:
     """Parse a single EVE JSON line into an AlerteIDS."""
     try:
         data = json.loads(line)
@@ -39,12 +38,12 @@ def parse_eve_json_line(line: str) -> Optional[AlerteIDS]:
     )
 
 
-def parser_ligne_eve(ligne: str) -> Optional[AlerteIDS]:
+def parser_ligne_eve(ligne: str) -> AlerteIDS | None:
     """Alias Francais pour le parseur EVE JSON."""
     return parse_eve_json_line(ligne)
 
 
-def _parse_timestamp(value: Optional[str]) -> datetime:
+def _parse_timestamp(value: str | None) -> datetime:
     if not value:
         return datetime.utcnow()
     try:
@@ -53,7 +52,7 @@ def _parse_timestamp(value: Optional[str]) -> datetime:
         return datetime.utcnow()
 
 
-def _map_severite(severity: Optional[int]) -> SeveriteAlerte:
+def _map_severite(severity: int | None) -> SeveriteAlerte:
     if severity is None:
         return SeveriteAlerte.MOYENNE
     if severity >= 3:

@@ -10,7 +10,7 @@ import json
 import logging
 import time
 from dataclasses import dataclass
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 import boto3
 from botocore.exceptions import ClientError, UnknownServiceError
@@ -36,14 +36,14 @@ class OpenSearchDomainStatus:
     domain_name: str
     domain_id: str
     arn: str
-    endpoint: Optional[str]
+    endpoint: str | None
     processing: bool
     created: bool
     deleted: bool
     engine_version: str
-    cluster_config: Dict[str, Any]
-    ebs_options: Dict[str, Any]
-    access_policies: Optional[str] = None
+    cluster_config: dict[str, Any]
+    ebs_options: dict[str, Any]
+    access_policies: str | None = None
 
 
 @dataclass
@@ -73,9 +73,9 @@ class OpenSearchDomainManager:
 
     def __init__(
         self,
-        aws_access_key_id: Optional[str] = None,
-        aws_secret_access_key: Optional[str] = None,
-        aws_session_token: Optional[str] = None,
+        aws_access_key_id: str | None = None,
+        aws_secret_access_key: str | None = None,
+        aws_session_token: str | None = None,
         region: str = "us-east-1",
     ):
         """
@@ -178,7 +178,7 @@ class OpenSearchDomainManager:
 
         return domain_status
 
-    def get_domain_status(self, domain_name: str) -> Optional[OpenSearchDomainStatus]:
+    def get_domain_status(self, domain_name: str) -> OpenSearchDomainStatus | None:
         """
         Récupère le statut d'un domaine.
 
@@ -196,7 +196,7 @@ class OpenSearchDomainManager:
                 return None
             raise
 
-    def list_domains(self) -> List[str]:
+    def list_domains(self) -> list[str]:
         """
         Liste tous les domaines OpenSearch du compte.
 
@@ -263,7 +263,7 @@ class OpenSearchDomainManager:
     # Index Management
     # =========================================================================
 
-    def get_opensearch_client(self, endpoint: str) -> Optional[OpenSearch]:
+    def get_opensearch_client(self, endpoint: str) -> OpenSearch | None:
         """
         Crée un client OpenSearch pour interagir avec les index.
 
@@ -298,7 +298,7 @@ class OpenSearchDomainManager:
 
         return client
 
-    def list_indexes(self, endpoint: str) -> List[OpenSearchIndex]:
+    def list_indexes(self, endpoint: str) -> list[OpenSearchIndex]:
         """
         Liste tous les index d'un domaine.
 
@@ -340,8 +340,8 @@ class OpenSearchDomainManager:
         self,
         endpoint: str,
         index_name: str,
-        mappings: Optional[Dict[str, Any]] = None,
-        settings: Optional[Dict[str, Any]] = None,
+        mappings: dict[str, Any] | None = None,
+        settings: dict[str, Any] | None = None,
     ) -> bool:
         """
         Crée un nouvel index.
@@ -429,7 +429,7 @@ class OpenSearchDomainManager:
     # Helper Methods
     # =========================================================================
 
-    def _parse_domain_status(self, status: Dict[str, Any]) -> OpenSearchDomainStatus:
+    def _parse_domain_status(self, status: dict[str, Any]) -> OpenSearchDomainStatus:
         """Parse le statut d'un domaine depuis la réponse API."""
         return OpenSearchDomainStatus(
             domain_name=status["DomainName"],

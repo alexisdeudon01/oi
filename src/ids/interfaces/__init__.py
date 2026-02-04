@@ -19,7 +19,7 @@ class LoggerIDS(Protocol):
         """Loggue une information."""
         ...
 
-    def erreur(self, message: str, exception: Optional[Exception] = None) -> None:
+    def erreur(self, message: str, exception: Exception | None = None) -> None:
         """Loggue une erreur."""
         ...
 
@@ -40,8 +40,8 @@ __all__ = [
     "AlerteSource",
     "GestionnaireComposant",
     "GestionnaireConfig",
-    "PersistanceAlertes",
     "LoggerIDS",
     "MetriquesProvider",
+    "PersistanceAlertes",
     "PipelineStatusProvider",
 ]
