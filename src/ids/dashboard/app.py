@@ -101,7 +101,6 @@ async def lifespan(app: FastAPI):
         logger.error(f"Failed to initialize hardware controller: {exc}")
         await record_startup_issue("hardware", exc)
 
-    tailnet = os.getenv("TAILSCALE_TAILNET")
     tailscale_api_key = os.getenv("TAILSCALE_API_KEY")
     if tailnet and tailscale_api_key:
         try:
@@ -372,13 +371,13 @@ def create_dashboard_app() -> FastAPI:
     @app.get("/api/setup/tailnet/verify")
     async def verify_tailnet() -> dict:
         """Verify Tailscale tailnet configuration."""
-        tailnet = os.getenv("TAILSCALE_TAILNET")
         api_key = os.getenv("TAILSCALE_API_KEY")
+        tailnet = os.getenv("TAILSCALE_TAILNET")  # Optionnel
 
-        if not tailnet or not api_key:
+        if not api_key:
             return {
                 "configured": False,
-                "error": "TAILSCALE_TAILNET or TAILSCALE_API_KEY not set",
+                "error": "TAILSCALE_API_KEY not set",
             }
 
         setup = TailnetSetup(tailnet, api_key)
@@ -391,13 +390,13 @@ def create_dashboard_app() -> FastAPI:
         tags: list[str] | None = None,
     ) -> dict:
         """Create a Tailscale auth key."""
-        tailnet = os.getenv("TAILSCALE_TAILNET")
         api_key = os.getenv("TAILSCALE_API_KEY")
+        tailnet = os.getenv("TAILSCALE_TAILNET")  # Optionnel
 
-        if not tailnet or not api_key:
+        if not api_key:
             return {
                 "success": False,
-                "error": "TAILSCALE_TAILNET or TAILSCALE_API_KEY not set",
+                "error": "TAILSCALE_API_KEY not set",
             }
 
         setup = TailnetSetup(tailnet, api_key)

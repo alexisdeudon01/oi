@@ -1,6 +1,9 @@
 .venv/
 scripts/actions_secrets.map
 
+# Secrets
+secret.json
+
 # Python cache
 __pycache__/
 *.py[cod]
