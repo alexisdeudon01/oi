@@ -14,35 +14,79 @@ prompt() {
   fi
 }
 
-if ! command -v sshpass >/dev/null 2>&1; then
-  echo "sshpass is required. Install with: sudo apt-get install -y sshpass"
-  exit 1
-fi
-
 PI_HOST="$(prompt 'IP du Raspberry Pi')"
 PI_USER="$(prompt 'Utilisateur SSH' 'pi')"
-read -r -s -p "Mot de passe SSH: " PI_PASS
-echo ""
-read -r -s -p "Mot de passe sudo: " SUDO_PASS
-echo ""
 
-REMOTE_DIR="$(prompt 'Répertoire d’installation sur le Pi' '/opt/ids-dashboard')"
+# Offer SSH key-based authentication as the preferred method
+echo ""
+echo "Options d'authentification:"
+echo "  1) Clé SSH (recommandé - plus sécurisé)"
+echo "  2) Mot de passe (sshpass requis)"
+AUTH_METHOD="$(prompt 'Méthode d'authentification' '1')"
+
+USE_SSH_KEY=false
+PI_PASS=""
+SUDO_PASS=""
+
+if [ "$AUTH_METHOD" = "1" ]; then
+  USE_SSH_KEY=true
+  SSH_KEY_PATH="$(prompt 'Chemin vers la clé SSH' "$HOME/.ssh/id_rsa")"
+  if [ ! -f "$SSH_KEY_PATH" ]; then
+    echo "❌ Clé SSH introuvable: $SSH_KEY_PATH"
+    exit 1
+  fi
+  echo "✅ Utilisation de la clé SSH: $SSH_KEY_PATH"
+  read -r -s -p "Mot de passe sudo: " SUDO_PASS
+  echo ""
+else
+  if ! command -v sshpass >/dev/null 2>&1; then
+    echo "❌ sshpass est requis pour l'authentification par mot de passe."
+    echo "   Installez avec: sudo apt-get install -y sshpass"
+    echo "   Ou utilisez l'authentification par clé SSH (option 1)."
+    exit 1
+  fi
+  read -r -s -p "Mot de passe SSH: " PI_PASS
+  echo ""
+  read -r -s -p "Mot de passe sudo: " SUDO_PASS
+  echo ""
+fi
+
+REMOTE_DIR="$(prompt 'Répertoire d'installation sur le Pi' '/opt/ids-dashboard')"
 MIRROR_INTERFACE="$(prompt 'Interface miroir' 'eth0')"
 
 if [ -z "$PI_HOST" ]; then
-  echo "IP du Raspberry Pi requise."
+  echo "❌ IP du Raspberry Pi requise."
   exit 1
 fi
 
 run_remote() {
   local cmd="$1"
-  sshpass -p "$PI_PASS" ssh -o StrictHostKeyChecking=accept-new "${PI_USER}@${PI_HOST}" "$cmd"
+  if [ "$USE_SSH_KEY" = true ]; then
+    ssh -i "$SSH_KEY_PATH" -o StrictHostKeyChecking=accept-new "${PI_USER}@${PI_HOST}" "$cmd"
+  else
+    sshpass -p "$PI_PASS" ssh -o StrictHostKeyChecking=accept-new "${PI_USER}@${PI_HOST}" "$cmd"
+  fi
 }
 
 run_remote_sudo() {
   local cmd="$1"
-  sshpass -p "$PI_PASS" ssh -o StrictHostKeyChecking=accept-new "${PI_USER}@${PI_HOST}" \
-    "echo '$SUDO_PASS' | sudo -S -p '' bash -lc $(printf %q "$cmd")"
+  # Create a temporary script on the remote host to avoid exposing sudo password in process arguments
+  local remote_script="/tmp/sudo-helper-$$.sh"
+  
+  # Upload the command to execute via stdin to avoid it appearing in ps output
+  if [ "$USE_SSH_KEY" = true ]; then
+    ssh -i "$SSH_KEY_PATH" -o StrictHostKeyChecking=accept-new "${PI_USER}@${PI_HOST}" \
+      "cat > '$remote_script' && chmod +x '$remote_script' && echo '$SUDO_PASS' | sudo -S -p '' '$remote_script' && rm -f '$remote_script'" <<EOF
+#!/bin/bash
+$cmd
+EOF
+  else
+    sshpass -p "$PI_PASS" ssh -o StrictHostKeyChecking=accept-new "${PI_USER}@${PI_HOST}" \
+      "cat > '$remote_script' && chmod +x '$remote_script' && echo '$SUDO_PASS' | sudo -S -p '' '$remote_script' && rm -f '$remote_script'" <<EOF
+#!/bin/bash
+$cmd
+EOF
+  fi
 }
 
 echo "📦 Préparation du paquet..."
@@ -58,8 +102,13 @@ echo "🔐 Création du répertoire distant..."
 run_remote_sudo "mkdir -p '$REMOTE_DIR' && chown -R '${PI_USER}:${PI_USER}' '$REMOTE_DIR'"
 
 echo "🚚 Transfert du dépôt vers le Pi..."
-sshpass -p "$PI_PASS" scp -o StrictHostKeyChecking=accept-new "$ARCHIVE_PATH" \
-  "${PI_USER}@${PI_HOST}:/tmp/ids-dashboard.tar.gz"
+if [ "$USE_SSH_KEY" = true ]; then
+  scp -i "$SSH_KEY_PATH" -o StrictHostKeyChecking=accept-new "$ARCHIVE_PATH" \
+    "${PI_USER}@${PI_HOST}:/tmp/ids-dashboard.tar.gz"
+else
+  sshpass -p "$PI_PASS" scp -o StrictHostKeyChecking=accept-new "$ARCHIVE_PATH" \
+    "${PI_USER}@${PI_HOST}:/tmp/ids-dashboard.tar.gz"
+fi
 
 echo "📂 Extraction sur le Pi..."
 run_remote_sudo "rm -rf '$REMOTE_DIR'/*"

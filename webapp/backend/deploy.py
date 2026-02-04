@@ -58,6 +58,7 @@ def upload_repo(client: paramiko.SSHClient, local_root: Path, remote_root: str) 
             try:
                 sftp.mkdir(remote_path)
             except IOError:
+                # Directory may already exist; ignore error
                 pass
             for file_name in files:
                 if file_name == "secret.json":
