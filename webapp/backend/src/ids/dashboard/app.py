@@ -284,6 +284,7 @@ def create_dashboard_app() -> FastAPI:
                 temp_raw = temp_file.read_text().strip()
                 temperature = float(temp_raw) / 1000.0  # Convert from millidegrees
         except Exception:
+            # Temperature reading is optional; silently ignore if thermal zone unavailable
             pass
 
         boot_time = psutil.boot_time()
@@ -323,7 +324,6 @@ def create_dashboard_app() -> FastAPI:
         """Get pipeline component status."""
 
         # Check Suricata
-        suricata_status = "unknown"
         try:
             result = await asyncio.to_thread(
                 lambda: __import__("subprocess").run(
@@ -337,7 +337,6 @@ def create_dashboard_app() -> FastAPI:
             suricata_status = "error"
 
         # Check Vector
-        vector_status = "unknown"
         try:
             result = await asyncio.to_thread(
                 lambda: __import__("subprocess").run(
