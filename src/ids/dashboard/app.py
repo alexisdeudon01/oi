@@ -64,9 +64,9 @@ async def lifespan(app: FastAPI):
 
     dashboard_state["ai_healing"] = AIHealingService(api_key=os.getenv("ANTHROPIC_API_KEY"))
 
-    tailnet = os.getenv("TAILSCALE_TAILNET")
     tailscale_api_key = os.getenv("TAILSCALE_API_KEY")
-    if tailnet and tailscale_api_key:
+    tailnet = os.getenv("TAILSCALE_TAILNET")  # Optionnel, sera auto-détecté
+    if tailscale_api_key:
         dashboard_state["tailscale"] = TailscaleMonitor(tailnet=tailnet, api_key=tailscale_api_key)
     else:
         dashboard_state["tailscale"] = None
@@ -285,13 +285,13 @@ def create_dashboard_app() -> FastAPI:
     @app.get("/api/setup/tailnet/verify")
     async def verify_tailnet() -> dict:
         """Verify Tailscale tailnet configuration."""
-        tailnet = os.getenv("TAILSCALE_TAILNET")
         api_key = os.getenv("TAILSCALE_API_KEY")
+        tailnet = os.getenv("TAILSCALE_TAILNET")  # Optionnel
 
-        if not tailnet or not api_key:
+        if not api_key:
             return {
                 "configured": False,
-                "error": "TAILSCALE_TAILNET or TAILSCALE_API_KEY not set",
+                "error": "TAILSCALE_API_KEY not set",
             }
 
         setup = TailnetSetup(tailnet, api_key)
@@ -304,13 +304,13 @@ def create_dashboard_app() -> FastAPI:
         tags: list[str] | None = None,
     ) -> dict:
         """Create a Tailscale auth key."""
-        tailnet = os.getenv("TAILSCALE_TAILNET")
         api_key = os.getenv("TAILSCALE_API_KEY")
+        tailnet = os.getenv("TAILSCALE_TAILNET")  # Optionnel
 
-        if not tailnet or not api_key:
+        if not api_key:
             return {
                 "success": False,
-                "error": "TAILSCALE_TAILNET or TAILSCALE_API_KEY not set",
+                "error": "TAILSCALE_API_KEY not set",
             }
 
         setup = TailnetSetup(tailnet, api_key)
